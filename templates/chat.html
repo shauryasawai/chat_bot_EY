@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tata Capital - AI Loan Assistant</title>
+    <style>
+        :root {
+            /* Brand Colors */
+            --tata-red: #A6192E;
+            --tata-blue: #003865;
+            --ey-yellow: #FFE600;
+            
+            /* Tech Theme Colors */
+            --tech-cyan: #00f2ff;
+            --glass-white: rgba(255, 255, 255, 0.90);
+            --glass-border: rgba(255, 255, 255, 0.2);
+            --msg-user-bg: linear-gradient(135deg, #003865 0%, #005a9e 100%);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', 'Roboto', Helvetica, Arial, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            color: #333;
+            background: 
+                linear-gradient(rgba(10, 20, 40, 0.85), rgba(5, 10, 20, 0.95)),
+                url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=2072&auto=format&fit=crop');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            background-repeat: no-repeat;
+        }
+
+        .chat-container {
+            width: 100%;
+            max-width: 800px;
+            height: 90vh;
+            background: var(--glass-white);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: 20px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--glass-border);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .chat-header {
+            background: linear-gradient(135deg, var(--tata-red) 0%, #7d0f20 100%);
+            color: white;
+            padding: 20px 25px;
+            position: relative;
+            box-shadow: 0 4px 15px rgba(166, 25, 46, 0.3);
+            z-index: 10;
+        }
+
+        .chat-header::after {
+            content: ''; position: absolute; bottom: 0; left: 0; width: 100%; height: 2px;
+            background: linear-gradient(90deg, var(--tata-red), var(--ey-yellow), var(--tata-red));
+        }
+
+        .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+        .brand-title { font-size: 24px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; }
+        
+        .team-badge {
+            font-size: 11px; background: rgba(255,255,255,0.15); padding: 5px 12px;
+            border-radius: 20px; font-weight: 600; border: 1px solid rgba(255,255,255,0.3);
+            display: flex; align-items: center; gap: 5px;
+        }
+        .team-badge::before { content: '●'; color: var(--ey-yellow); font-size: 10px; }
+
+        .sub-header-info { display: flex; justify-content: space-between; align-items: center; margin-top: 15px; font-size: 11px; opacity: 0.9; font-family: monospace; }
+
+        .messages-container {
+            flex: 1; overflow-y: auto; padding: 25px;
+            background: rgba(244, 245, 247, 0.6); scroll-behavior: smooth;
+        }
+
+        .message { margin-bottom: 20px; display: flex; gap: 12px; opacity: 0; animation: slideInFade 0.4s ease forwards; }
+        @keyframes slideInFade { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+
+        .message.agent { justify-content: flex-start; }
+        .message.user { justify-content: flex-end; }
+
+        .message-content {
+            max-width: 75%; padding: 14px 20px; border-radius: 18px; line-height: 1.5; font-size: 15px; position: relative; box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        .agent .message-content { background: white; color: #333; border-bottom-left-radius: 4px; }
+        .user .message-content { background: var(--msg-user-bg); color: white; border-bottom-right-radius: 4px; }
+
+        /* --- UPLOAD SECTION --- */
+        .upload-section {
+            padding: 20px 25px; background: white; border-top: 2px solid var(--tata-blue);
+            display: none; box-shadow: 0 -5px 20px rgba(0,0,0,0.05);
+        }
+        .upload-section.active { display: block; animation: slideUp 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+
+        .upload-label { font-weight: 700; color: var(--tata-red); margin-bottom: 12px; display: block; }
+
+        /* --- Standard Upload Area --- */
+        .upload-area {
+            border: 2px dashed #cfcfcf; border-radius: 12px; padding: 30px;
+            text-align: center; background: #f8f9fa; cursor: pointer; transition: all 0.3s;
+        }
+        .upload-area:hover { border-color: var(--tata-blue); background: #eef4fa; }
+
+        /* --- LIVE CAMERA UI --- */
+        .camera-container {
+            display: none; position: relative; width: 100%; max-width: 400px;
+            margin: 0 auto; border-radius: 12px; overflow: hidden; background: #000;
+            border: 2px solid var(--tata-blue);
+        }
+        .camera-container.active { display: block; }
+
+        video#cameraFeed { width: 100%; height: auto; display: block; transform: scaleX(-1); /* Mirror effect */ }
+        canvas#cameraCanvas { display: none; }
+
+        /* Camera HUD Overlay */
+        .camera-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 10;
+            border: 2px solid rgba(0, 242, 255, 0.3);
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.5);
+        }
+        
+        /* Face guide box */
+        .face-guide {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 200px; height: 250px;
+            border: 2px dashed var(--ey-yellow); border-radius: 50% 50% 40% 40%;
+            opacity: 0.7;
+        }
+
+        .preview-container {
+            margin-top: 15px; display: none; position: relative; border-radius: 8px;
+            overflow: hidden; width: fit-content; margin-left: auto; margin-right: auto;
+            border: 1px solid var(--tata-blue);
+        }
+        .preview-container.active { display: block; }
+        .preview-image { max-width: 100%; max-height: 200px; display: block; }
+
+        /* Scanner Animation */
+        .scanner-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(to bottom, rgba(0, 242, 255, 0.2), transparent);
+            border-bottom: 2px solid var(--tech-cyan); display: none; z-index: 5;
+        }
+        .scanning .scanner-overlay { display: block; animation: scanDocument 1.5s infinite linear; }
+        @keyframes scanDocument { 0% { transform: translateY(-100%); } 100% { transform: translateY(100%); } }
+
+        /* Buttons */
+        .action-buttons { display: flex; gap: 10px; margin-top: 15px; }
+        
+        .upload-btn, .camera-btn {
+            flex: 1; background: var(--tata-blue); color: white; border: none;
+            padding: 14px 20px; border-radius: 30px; font-size: 14px; font-weight: 700;
+            cursor: pointer; text-transform: uppercase; letter-spacing: 1px; transition: all 0.3s;
+        }
+        .upload-btn:hover:not(:disabled), .camera-btn:hover { background: #002a4d; transform: translateY(-2px); }
+        .upload-btn:disabled { background: #ccc; cursor: not-allowed; transform: none; }
+        
+        .secondary-btn {
+            background: transparent; border: 2px solid var(--tata-blue); color: var(--tata-blue);
+        }
+        .secondary-btn:hover { background: #f0f7ff; }
+
+        /* --- INPUT & FOOTER --- */
+        .input-section { padding: 20px 25px; background: white; border-top: 1px solid #eee; }
+        .input-container { display: flex; gap: 12px; }
+        #messageInput {
+            flex: 1; padding: 15px 25px; border: 2px solid #e1e1e1; border-radius: 30px;
+            font-size: 15px; outline: none; transition: all 0.3s; background: #f9f9f9;
+        }
+        #messageInput:focus { border-color: var(--tata-blue); background: white; }
+        #sendBtn {
+            background: linear-gradient(135deg, var(--tata-red), var(--tata-dark-red)); color: white;
+            border: none; padding: 0 35px; border-radius: 30px; font-size: 15px; font-weight: 600;
+            cursor: pointer; transition: all 0.3s;
+        }
+
+        /* Status & Loaders */
+        .verification-status {
+            padding: 15px; margin: 10px 0; border-radius: 12px; font-size: 14px; font-weight: 600;
+            display: flex; align-items: center; gap: 10px; animation: slideInFade 0.3s ease;
+        }
+        .verification-status.success { background: rgba(46, 204, 113, 0.15); color: #219653; border: 1px solid #2ecc71; }
+        .verification-status.error { background: rgba(231, 76, 60, 0.1); color: #c0392b; border: 1px solid #e74c3c; }
+
+        .typing-indicator { display: none; padding: 15px; margin-left: 10px; }
+        .typing-indicator.active { display: block; }
+        .typing-dots span {
+            display: inline-block; width: 8px; height: 8px; background: var(--tata-blue);
+            border-radius: 50%; margin-right: 5px; animation: typing 1.4s infinite;
+        }
+        @keyframes typing { 0%, 60%, 100% { transform: translateY(0); opacity: 0.5; } 30% { transform: translateY(-6px); opacity: 1; } }
+
+        .footer-credit { text-align: center; padding-top: 10px; font-size: 11px; color: #888; }
+        
+        /* Loan Card */
+        .loan-approved {
+            text-align: center; padding: 30px; background: linear-gradient(to bottom right, #ffffff, #f0fff4);
+            color: #333; border-radius: 16px; margin: 20px 0; border: 1px solid #2ecc71; position: relative;
+        }
+        .download-btn {
+            background: var(--tata-blue); color: white; border: none; padding: 12px 28px;
+            border-radius: 8px; font-weight: 600; cursor: pointer; margin-top: 15px;
+            text-decoration: none; display: inline-flex; align-items: center; gap: 8px; font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <div class="header-top">
+                <div class="brand-title">TATA CAPITAL</div>
+                <div class="team-badge">EY Technothon 6.0</div>
+            </div>
+            <p style="font-size: 14px; opacity: 0.9;">AI-Powered KYC & Loan Processing</p>
+            <div class="sub-header-info">
+                <span>By Team Code Crushers</span>
+                <span>🔒 Secure Connection</span>
+            </div>
+        </div>
+
+        <div class="messages-container" id="messagesContainer">
+            <div class="typing-indicator" id="typingIndicator">
+                <div class="typing-dots"><span></span><span></span><span></span></div>
+            </div>
+        </div>
+
+        <div class="upload-section" id="uploadSection">
+            <label class="upload-label" id="uploadLabel">📤 Upload Document</label>
+            
+            <div class="upload-area" id="uploadArea">
+                <div class="upload-icon" id="uploadIcon" style="font-size: 48px;">🆔</div>
+                <p id="uploadText"><strong>Click to upload</strong> or drag and drop</p>
+                <p style="font-size: 13px; color: #888; margin-top: 5px;" id="uploadHint">JPG, PNG, or WebP</p>
+                <input type="file" id="fileInput" accept="image/*">
+            </div>
+
+            <div class="camera-container" id="cameraContainer">
+                <video id="cameraFeed" autoplay playsinline></video>
+                <canvas id="cameraCanvas"></canvas>
+                <div class="camera-overlay">
+                    <div class="face-guide"></div> </div>
+            </div>
+            
+            <div class="preview-container" id="previewContainer">
+                <div class="scanner-overlay" id="scannerOverlay"></div>
+                <img id="previewImage" class="preview-image" alt="Preview">
+            </div>
+            
+            <div class="action-buttons" id="actionButtons">
+                <button class="upload-btn" id="uploadBtn" disabled>Upload Document</button>
+            </div>
+        </div>
+
+        <div class="input-section">
+            <div class="input-container">
+                <input type="text" id="messageInput" placeholder="Type here..." autocomplete="off">
+                <button id="sendBtn" disabled>Send</button>
+            </div>
+            <div class="footer-credit">Powered by Team Code Crushers | EY Technothon 2025</div>
+        </div>
+    </div>
+
+    <script>
+        let sessionId = null;
+        let currentUploadType = null;
+        let selectedFile = null;
+        let stream = null; // To store camera stream
+
+        window.addEventListener('load', initChat);
+
+        async function initChat() {
+            showTyping();
+            try {
+                const response = await fetch('/start_chat/', { method: 'POST' });
+                const data = await response.json();
+                hideTyping();
+                if (data.session_id) {
+                    sessionId = data.session_id;
+                    addMessage(data.message, 'agent');
+                    document.getElementById('sendBtn').disabled = false;
+                }
+            } catch (error) {
+                hideTyping();
+                addMessage('Failed to connect. Please refresh.', 'agent');
+            }
+        }
+
+        // Chat & UI Functions
+        document.getElementById('sendBtn').addEventListener('click', sendMessageHandler);
+        document.getElementById('messageInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessageHandler();
+        });
+
+        function sendMessageHandler() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            if (message && sessionId) {
+                sendMessage(message);
+                input.value = '';
+            }
+        }
+
+        async function sendMessage(message) {
+            addMessage(message, 'user');
+            showTyping();
+            try {
+                const response = await fetch('/chat/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId, message: message })
+                });
+                const data = await response.json();
+                hideTyping();
+                
+                if (data.message) addMessage(data.message, 'agent');
+                if (data.requires_upload) showUploadSection(data.upload_type);
+                else hideUploadSection();
+                if (data.sanction_letter_url) showLoanApproval(data.sanction_letter_url);
+            } catch (error) {
+                hideTyping();
+                addMessage('Error processing request.', 'agent');
+            }
+        }
+
+        function addMessage(text, type) {
+            const container = document.getElementById('messagesContainer');
+            const div = document.createElement('div');
+            div.className = `message ${type}`;
+            div.innerHTML = `<div class="message-content">${text}</div>`;
+            container.insertBefore(div, document.getElementById('typingIndicator'));
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function showTyping() {
+            document.getElementById('typingIndicator').classList.add('active');
+            document.getElementById('messagesContainer').scrollTop = document.getElementById('messagesContainer').scrollHeight;
+        }
+        function hideTyping() { document.getElementById('typingIndicator').classList.remove('active'); }
+
+        /* --- UPLOAD & CAMERA LOGIC --- */
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const previewContainer = document.getElementById('previewContainer');
+        const previewImage = document.getElementById('previewImage');
+        const cameraContainer = document.getElementById('cameraContainer');
+        const video = document.getElementById('cameraFeed');
+        const canvas = document.getElementById('cameraCanvas');
+        const actionButtons = document.getElementById('actionButtons');
+
+        uploadArea.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => handleFileSelect(e.target.files[0]));
+
+        function handleFileSelect(file) {
+            if (!file) return;
+            selectedFile = file;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                previewImage.src = e.target.result;
+                previewContainer.classList.add('active');
+                // If camera was active, hide it
+                stopCamera();
+                cameraContainer.classList.remove('active');
+                uploadArea.style.display = 'none';
+            };
+            reader.readAsDataURL(file);
+            renderButtons('upload');
+        }
+
+        function showUploadSection(uploadType) {
+            currentUploadType = uploadType;
+            document.getElementById('uploadSection').classList.add('active');
+            resetUploadUI();
+
+            const config = {
+                'pan_card': { label: 'Upload PAN Card', icon: '🆔' },
+                'selfie': { label: 'Take Live Selfie', icon: '🤳' },
+                'salary_slip': { label: 'Upload Salary Slip', icon: '📄' }
+            };
+            
+            const settings = config[uploadType] || config['pan_card'];
+            document.getElementById('uploadLabel').textContent = settings.label;
+            document.getElementById('uploadIcon').textContent = settings.icon;
+            
+            // If Selfie, prioritize Camera UI
+            if (uploadType === 'selfie') {
+                document.getElementById('uploadText').innerHTML = "<strong>Click to Start Camera</strong><br>or upload existing photo";
+                renderButtons('start_camera');
+            } else {
+                renderButtons('default');
+            }
+        }
+
+        function renderButtons(state) {
+            actionButtons.innerHTML = ''; // Clear buttons
+
+            if (state === 'default') {
+                // Standard File Upload Button
+                const btn = document.createElement('button');
+                btn.className = 'upload-btn';
+                btn.textContent = 'Select File';
+                btn.onclick = () => fileInput.click();
+                actionButtons.appendChild(btn);
+            } 
+            else if (state === 'start_camera') {
+                // Start Camera Button
+                const camBtn = document.createElement('button');
+                camBtn.className = 'camera-btn';
+                camBtn.innerHTML = '📷 Start Camera';
+                camBtn.onclick = startCamera;
+                actionButtons.appendChild(camBtn);
+
+                // Fallback Upload
+                const upBtn = document.createElement('button');
+                upBtn.className = 'upload-btn secondary-btn';
+                upBtn.textContent = 'Upload Image Instead';
+                upBtn.onclick = () => fileInput.click();
+                actionButtons.appendChild(upBtn);
+            }
+            else if (state === 'capture') {
+                // Capture Button
+                const capBtn = document.createElement('button');
+                capBtn.className = 'camera-btn';
+                capBtn.innerHTML = '⚪ Capture Photo';
+                capBtn.style.background = '#e74c3c'; // Red for recording/capture
+                capBtn.onclick = capturePhoto;
+                actionButtons.appendChild(capBtn);
+            }
+            else if (state === 'upload') {
+                // Final Upload Button
+                const upBtn = document.createElement('button');
+                upBtn.className = 'upload-btn';
+                upBtn.textContent = '✅ Verify & Upload';
+                upBtn.onclick = uploadDocument;
+                actionButtons.appendChild(upBtn);
+
+                // Retake Button
+                const retakeBtn = document.createElement('button');
+                retakeBtn.className = 'upload-btn secondary-btn';
+                retakeBtn.textContent = '↺ Retake';
+                retakeBtn.onclick = () => {
+                    previewContainer.classList.remove('active');
+                    if (currentUploadType === 'selfie') startCamera();
+                    else { resetUploadUI(); renderButtons('default'); }
+                };
+                actionButtons.appendChild(retakeBtn);
+            }
+        }
+
+        async function startCamera() {
+            try {
+                uploadArea.style.display = 'none';
+                cameraContainer.classList.add('active');
+                
+                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+                video.srcObject = stream;
+                renderButtons('capture');
+            } catch (err) {
+                alert("Camera access denied or not available. Please upload a file.");
+                resetUploadUI();
+                renderButtons('default');
+            }
+        }
+
+        function stopCamera() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+        }
+
+        function capturePhoto() {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            
+            // Stop video
+            stopCamera();
+            cameraContainer.classList.remove('active');
+
+            // Convert to file
+            canvas.toBlob(blob => {
+                selectedFile = new File([blob], "selfie.jpg", { type: "image/jpeg" });
+                previewImage.src = URL.createObjectURL(blob);
+                previewContainer.classList.add('active');
+                renderButtons('upload');
+            }, 'image/jpeg');
+        }
+
+        function resetUploadUI() {
+            stopCamera();
+            cameraContainer.classList.remove('active');
+            previewContainer.classList.remove('active');
+            uploadArea.style.display = 'block';
+            selectedFile = null;
+        }
+
+        function hideUploadSection() {
+            document.getElementById('uploadSection').classList.remove('active');
+            resetUploadUI();
+        }
+
+        async function uploadDocument() {
+            if (!selectedFile || !sessionId) return;
+            
+            // UI Feedback
+            const btn = document.querySelector('.upload-btn'); // Get current upload button
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.innerHTML = '<span style="animation:spin 1s infinite linear;display:inline-block">↻</span> Verifying...';
+            previewContainer.classList.add('scanning'); // Start scan animation
+
+            const formData = new FormData();
+            formData.append('session_id', sessionId);
+
+            let endpoint = '/upload_pan_card/';
+            if (currentUploadType === 'selfie') {
+                formData.append('selfie_image', selectedFile);
+                endpoint = '/upload_selfie/';
+            } else if (currentUploadType === 'salary_slip') {
+                formData.append('salary_slip', selectedFile);
+                endpoint = '/upload_salary_slip/';
+            } else {
+                formData.append('pan_card_image', selectedFile);
+            }
+
+            try {
+                const response = await fetch(endpoint, { method: 'POST', body: formData });
+                const data = await response.json();
+                
+                previewContainer.classList.remove('scanning');
+
+                if (data.verified || data.success) {
+                    showVerificationStatus('success', data.message);
+                    if (data.next_message) setTimeout(() => addMessage(data.next_message, 'agent'), 1000);
+                    setTimeout(() => {
+                        hideUploadSection();
+                        if (data.sanction_letter_url) showLoanApproval(data.sanction_letter_url);
+                    }, 2000);
+                } else {
+                    showVerificationStatus('error', data.message || "Verification Failed");
+                    btn.textContent = originalText;
+                    btn.disabled = false;
+                }
+            } catch (error) {
+                previewContainer.classList.remove('scanning');
+                showVerificationStatus('error', "Upload failed.");
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        function showVerificationStatus(type, message) {
+            const container = document.getElementById('messagesContainer');
+            const div = document.createElement('div');
+            div.className = `verification-status ${type}`;
+            div.innerHTML = `<span>${type === 'success' ? '✅' : '⚠️'}</span> ${message}`;
+            container.insertBefore(div, document.getElementById('typingIndicator'));
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function showLoanApproval(url) {
+            const container = document.getElementById('messagesContainer');
+            const div = document.createElement('div');
+            div.className = 'loan-approved';
+            div.innerHTML = `
+                <h3>🎉 Loan Approved!</h3>
+                <p>Congratulations, your application is successful.</p>
+                <a href="${url}" class="download-btn" download>📥 Download Sanction Letter</a>
+            `;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+    </script>
+</body>
+</html>
