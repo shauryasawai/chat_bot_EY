@@ -318,28 +318,6 @@ python manage.py runserver
 
 ## ⚙️ Configuration
 
-### OpenAI API Setup
-
-1. **Get API Key**: Visit [OpenAI Platform](https://platform.openai.com/api-keys)
-2. **Enable GPT-4 Vision**: Ensure your account has GPT-4o access
-3. **Set API Key**: Add to `.env` file
-4. **Test Connection**: Run test script
-
-```python
-# test_openai.py
-from openai import OpenAI
-import os
-
-client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
-
-response = client.chat.completions.create(
-    model="gpt-4o",
-    messages=[{"role": "user", "content": "Hello!"}]
-)
-
-print(response.choices[0].message.content)
-```
-
 ### Database Configuration
 
 #### SQLite (Development)
