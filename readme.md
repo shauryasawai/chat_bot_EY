@@ -22,7 +22,6 @@
 - [Configuration](#-configuration)
 - [Usage](#-usage)
 - [Workflow](#-workflow)
-- [API Documentation](#-api-documentation)
 - [Contributing](#-contributing)
 - [Testing](#-testing)
 - [Deployment](#-deployment)
