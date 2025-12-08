@@ -510,117 +510,6 @@ Password: sawai
 
 ---
 
-## 📡 API Documentation
-
-### Endpoints
-
-#### 1. Start Chat Session
-```http
-POST /start_chat/
-Content-Type: application/json
-
-Response:
-{
-  "session_id": "123",
-  "message": "Hello! Welcome to our loan application...",
-  "agent": "master",
-  "workflow_stage": "greeting"
-}
-```
-
-#### 2. Send Chat Message
-```http
-POST /chat/
-Content-Type: application/json
-
-Request:
-{
-  "session_id": "123",
-  "message": "My name is John Doe"
-}
-
-Response:
-{
-  "message": "Thank you John! Please upload your PAN card...",
-  "agent": "master",
-  "workflow_stage": "pan_verification",
-  "requires_upload": true,
-  "upload_type": "pan_card"
-}
-```
-
-#### 3. Upload PAN Card
-```http
-POST /upload_pan_card/
-Content-Type: multipart/form-data
-
-Request:
-- session_id: "123"
-- pan_card_image: [file]
-
-Response:
-{
-  "success": true,
-  "verified": true,
-  "message": "PAN card verified successfully!",
-  "data": {
-    "pan_number": "ABCDE1234F",
-    "name": "JOHN DOE",
-    "confidence_score": 95
-  },
-  "workflow_stage": "selfie_verification"
-}
-```
-
-#### 4. Upload Selfie
-```http
-POST /upload_selfie/
-Content-Type: multipart/form-data
-
-Request:
-- session_id: "123"
-- selfie_image: [file]
-
-Response:
-{
-  "success": true,
-  "verified": true,
-  "message": "Face verified successfully!",
-  "match_score": 85,
-  "workflow_stage": "sales"
-}
-```
-
-#### 5. Upload Salary Slip
-```http
-POST /upload_salary_slip/
-Content-Type: multipart/form-data
-
-Request:
-- session_id: "123"
-- salary_slip: [file]
-
-Response:
-{
-  "success": true,
-  "message": "Congratulations! Your loan has been approved!",
-  "sanction_letter_url": "/media/sanction_letters/...",
-  "workflow_stage": "closing"
-}
-```
-
-#### 6. Download Sanction Letter
-```http
-GET /download_sanction/<loan_id>/
-
-Response:
-Content-Type: application/pdf
-Content-Disposition: attachment; filename="sanction_letter_123.pdf"
-[PDF Binary Data]
-```
-
----
-
 ## 🤝 Contributing
 
 We welcome contributions from the community! Here's how you can help:
@@ -816,7 +705,7 @@ python manage.py collectstatic --noinput
 - **Debajyoti** - Frontend Developer
 - **Manisha** - Frontend Developer
 - **Deepak** - Database & DevOps
-- 
+
 **Institution:** National Institute of Technology, Rourkela
 
 ---
@@ -846,7 +735,7 @@ in the Software without restriction...
 
 ### Contact Information
 - **Email**: sawaisushil@gmail.com
-- **LinkedIn**: Shauryaman Sawai
+- **LinkedIn**: https://www.linkedin.com/in/shauryaman-sawai-1a4969289/
 
 ### Support
 For technical support or questions:
