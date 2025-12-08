@@ -6,16 +6,41 @@ import json
 
 
 class Customer(models.Model):
+    EMPLOYMENT_CHOICES = [
+        ('salaried', 'Salaried'),
+        ('self_employed', 'Self Employed'),
+        ('business_owner', 'Business Owner'),
+        ('freelancer', 'Freelancer'),
+        ('gig_worker', 'Gig Worker'),
+        ('other', 'Other'),
+    ]
+    
+    # Basic Information
     name = models.CharField(max_length=200)
     pan = models.CharField(max_length=10, unique=True)
+    date_of_birth = models.DateField(null=True, blank=True)  # NEW: Critical for age segmentation
+    
+    # Contact Information
+    phone = models.CharField(max_length=15, null=True, blank=True)
+    email = models.EmailField(null=True, blank=True)
+    
+    # Documents
     pan_card_image = models.FileField(upload_to='pan_cards/', null=True, blank=True)
     selfie_image = models.FileField(upload_to='selfies/', null=True, blank=True)
     aadhar = models.CharField(max_length=12, null=True, blank=True)
-    phone = models.CharField(max_length=15, null=True, blank=True)
+    
+    # Financial Information
     credit_score = models.IntegerField(default=0)
     pre_approved_limit = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    
+    # NEW: Employment & Income Details (for segmentation)
+    employment_type = models.CharField(max_length=20, choices=EMPLOYMENT_CHOICES, null=True, blank=True)
+    monthly_income = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    company_name = models.CharField(max_length=200, null=True, blank=True)
+    
+    # NEW: Customer Segmentation (auto-calculated, stored for reference)
+    customer_segment = models.CharField(max_length=100, null=True, blank=True)
+    segment_calculated_at = models.DateTimeField(null=True, blank=True)
     
     # KYC verification fields
     pan_verified = models.BooleanField(default=False)
@@ -23,6 +48,37 @@ class Customer(models.Model):
     pan_verification_confidence = models.IntegerField(null=True, blank=True)
     face_match_verified = models.BooleanField(default=False)
     face_match_confidence = models.IntegerField(null=True, blank=True)
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def calculate_age(self):
+        """Calculate customer's age from date of birth"""
+        if not self.date_of_birth:
+            return None
+        from datetime import date
+        today = date.today()
+        age = today.year - self.date_of_birth.year - (
+            (today.month, today.day) < (self.date_of_birth.month, self.date_of_birth.day)
+        )
+        return age
+    
+    def get_segment(self):
+        """Get customer segment based on age, employment, and income"""
+        from .agents import CustomerSegmentation
+        age = self.calculate_age()
+        if age is None:
+            return None
+        return CustomerSegmentation.determine_segment(age, self.employment_type, self.monthly_income)
+    
+    def update_segment(self):
+        """Update and save customer segment"""
+        segment_info = self.get_segment()
+        if segment_info:
+            self.customer_segment = segment_info['segment']
+            self.segment_calculated_at = timezone.now()
+            self.save(update_fields=['customer_segment', 'segment_calculated_at'])
     
     def __str__(self):
         return f"{self.name} ({self.pan})"
@@ -48,8 +104,14 @@ class ChatSession(models.Model):
     
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE, null=True, blank=True)
     customer_name = models.CharField(max_length=200, null=True, blank=True)
+    
+    # NEW: Temporary storage for DOB before customer is created
+    temp_dob = models.CharField(max_length=20, null=True, blank=True)
+    
     stage = models.CharField(max_length=50, choices=STAGE_CHOICES, default='greeting')
     conversation_data = models.TextField(default='[]')  # JSON stored as text
+    
+    # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -84,14 +146,26 @@ class LoanApplication(models.Model):
     tenure_months = models.IntegerField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     
+    # NEW: Store segment at time of application
+    customer_segment_snapshot = models.CharField(max_length=100, null=True, blank=True)
+    
     # Underwriting details
     assessment_notes = models.TextField(null=True, blank=True)
     approval_reason = models.TextField(null=True, blank=True)
     rejection_reason = models.TextField(null=True, blank=True)
     
+    # NEW: Underwriting metrics (age-aware)
+    credit_score_threshold_used = models.IntegerField(null=True, blank=True)
+    emi_ratio_threshold_used = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    
     # Documents
     salary_slip = models.FileField(upload_to='salary_slips/', null=True, blank=True)
     sanction_letter = models.FileField(upload_to='sanction_letters/', null=True, blank=True)
+    
+    # NEW: Additional documents for self-employed
+    itr_document = models.FileField(upload_to='itr_documents/', null=True, blank=True)
+    gst_document = models.FileField(upload_to='gst_documents/', null=True, blank=True)
+    bank_statements = models.FileField(upload_to='bank_statements/', null=True, blank=True)
     
     # Timestamps
     applied_at = models.DateTimeField(auto_now_add=True)
@@ -99,8 +173,13 @@ class LoanApplication(models.Model):
     rejected_at = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
     
-    def __str__(self):
-        return f"LA-{self.id:06d} - {self.customer.name} - ₹{self.loan_amount}"
+    def save(self, *args, **kwargs):
+        """Auto-populate segment snapshot on creation"""
+        if not self.pk and self.customer:  # Only on creation
+            segment_info = self.customer.get_segment()
+            if segment_info:
+                self.customer_segment_snapshot = segment_info['segment']
+        super().save(*args, **kwargs)
     
     def approve(self, reason=""):
         self.status = 'approved'
@@ -113,6 +192,9 @@ class LoanApplication(models.Model):
         self.rejection_reason = reason
         self.rejected_at = timezone.now()
         self.save()
+    
+    def __str__(self):
+        return f"LA-{self.id:06d} - {self.customer.name} - ₹{self.loan_amount}"
     
     class Meta:
         db_table = 'loan_applications'
@@ -127,6 +209,10 @@ class DocumentVerification(models.Model):
         ('pan_card', 'PAN Card'),
         ('aadhar_card', 'Aadhar Card'),
         ('salary_slip', 'Salary Slip'),
+        ('selfie', 'Selfie'),  # NEW
+        ('itr', 'ITR Document'),  # NEW
+        ('gst', 'GST Document'),  # NEW
+        ('bank_statement', 'Bank Statement'),  # NEW
     ]
     
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name='verifications')

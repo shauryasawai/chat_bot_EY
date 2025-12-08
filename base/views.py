@@ -12,8 +12,8 @@ from .agents import (
     SalesAgent, 
     VerificationAgent, 
     UnderwritingAgent, 
-    SanctionLetterGenerator
-)
+    SanctionLetterGenerator,
+    CustomerSegmentation)
 
 
 def index(request):
@@ -38,6 +38,21 @@ def add_message(session, role, content, agent=None):
     conversation.append(message)
     session.conversation_data = json.dumps(conversation)
     return conversation
+
+
+def get_age_segment(session):
+    """Helper to get customer age segment from session"""
+    if not session.customer or not session.customer.date_of_birth:
+        return None
+    
+    age = CustomerSegmentation.get_age_from_dob(session.customer.date_of_birth)
+    if age is None:
+        return None
+    
+    employment_type = session.customer.employment_type if hasattr(session.customer, 'employment_type') else None
+    monthly_income = session.customer.monthly_income if hasattr(session.customer, 'monthly_income') else None
+    
+    return CustomerSegmentation.determine_segment(age, employment_type, monthly_income)
 
 
 @csrf_exempt
@@ -86,6 +101,9 @@ def upload_selfie(request):
     try:
         customer = session.customer
         
+        # Get age segment
+        age_segment = get_age_segment(session)
+        
         # Initialize face match agent
         face_agent = FaceMatchAgent()
         
@@ -120,9 +138,9 @@ def upload_selfie(request):
             # Add match message to conversation
             conversation = add_message(session, 'assistant', match_message, 'verification')
             
-            # Get sales agent to start loan discussion
+            # Get sales agent to start loan discussion with age-aware messaging
             sales_agent = SalesAgent()
-            loan_message = sales_agent.engage_customer(session, conversation)
+            loan_message = sales_agent.engage_customer(session, conversation, age_segment)
             
             add_message(session, 'assistant', loan_message, 'sales')
             session.save()
@@ -135,7 +153,8 @@ def upload_selfie(request):
                 'data': {
                     'confidence_score': confidence,
                     'match_quality': match_result.get('match_quality', 'fair'),
-                    'features_matched': match_result.get('facial_features_matched', [])
+                    'features_matched': match_result.get('facial_features_matched', []),
+                    'customer_segment': age_segment['segment'] if age_segment else None
                 },
                 'workflow_stage': 'loan_details',
                 'requires_upload': False
@@ -214,6 +233,9 @@ def chat(request):
     verification_agent = VerificationAgent()
     underwriting_agent = UnderwritingAgent()
     
+    # Get age segment if customer exists
+    age_segment = get_age_segment(session)
+    
     sanction_letter_url = None
     requires_upload = False
     upload_type = None
@@ -221,30 +243,56 @@ def chat(request):
     
     # Process based on workflow stage
     if workflow_stage == 'greeting' or workflow_stage == 'name_collection':
-        # Extract name from conversation
-        name = master_agent.extract_name(conversation)
+        # Extract name and DOB from conversation
+        extracted_data = master_agent.extract_name_and_dob(conversation)
         
-        if name and name != 'NOT_FOUND':
-            # Store customer name temporarily
-            session.customer_name = name
+        if extracted_data:
+            name = extracted_data.get('name')
+            date_of_birth = extracted_data.get('date_of_birth')
             
-            # Search for existing customer by name
-            customers = Customer.objects.filter(name__icontains=name)
-            
-            if customers.exists():
-                # Existing customer found - request PAN number for verification
-                customer = customers.first()
-                session.stage = 'pan_collection'
-                workflow_stage = 'pan_collection'
-                response = master_agent.request_pan_number(customer.name)
+            # Check if we have name
+            if name and name != 'NOT_FOUND':
+                # Store customer name temporarily
+                session.customer_name = name
+                
+                # Check if DOB is also provided
+                if date_of_birth and date_of_birth != 'NOT_FOUND':
+                    # Store DOB temporarily
+                    session.temp_dob = date_of_birth
+                    
+                    # Calculate age and determine segment
+                    age = CustomerSegmentation.get_age_from_dob(date_of_birth)
+                    if age:
+                        temp_segment = CustomerSegmentation.determine_segment(age)
+                        age_segment = temp_segment
+                
+                # Search for existing customer by name
+                customers = Customer.objects.filter(name__icontains=name)
+                
+                if customers.exists():
+                    # Existing customer found - request PAN number for verification
+                    customer = customers.first()
+                    
+                    # If customer has DOB, calculate their segment
+                    if customer.date_of_birth:
+                        age_segment = get_age_segment(session)
+                    
+                    session.stage = 'pan_collection'
+                    workflow_stage = 'pan_collection'
+                    response = master_agent.request_pan_number(customer.name, age_segment)
+                else:
+                    # New customer - request PAN number
+                    session.stage = 'pan_collection'
+                    workflow_stage = 'pan_collection'
+                    response = master_agent.request_new_customer_pan(age_segment)
             else:
-                # New customer - request PAN number
-                session.stage = 'pan_collection'
-                workflow_stage = 'pan_collection'
-                response = master_agent.request_new_customer_pan()
+                # Couldn't extract name, ask again
+                response = "I didn't catch your name and date of birth. Could you please provide your full name and date of birth (DD/MM/YYYY or YYYY-MM-DD)?"
+                session.stage = 'name_collection'
+                workflow_stage = 'name_collection'
         else:
-            # Couldn't extract name, ask again
-            response = "I didn't catch your name. Could you please provide your full name?"
+            # No data extracted
+            response = "I didn't catch your name and date of birth. Could you please provide your full name and date of birth?"
             session.stage = 'name_collection'
             workflow_stage = 'name_collection'
     
@@ -259,9 +307,13 @@ def chat(request):
                 customer = Customer.objects.get(pan=pan_number)
                 # Existing customer with matching PAN
                 session.customer = customer
+                
+                # Get age segment for existing customer
+                age_segment = get_age_segment(session)
+                
                 session.stage = 'pan_verification'
                 workflow_stage = 'pan_verification'
-                response = master_agent.request_pan_upload(customer.name)
+                response = master_agent.request_pan_upload(customer.name, age_segment)
                 requires_upload = True
                 upload_type = 'pan_card'
             except Customer.DoesNotExist:
@@ -295,9 +347,9 @@ def chat(request):
         upload_type = 'selfie'
     
     elif workflow_stage == 'loan_details':
-        # Collect loan requirements
+        # Collect loan requirements with age-aware extraction
         current_agent = 'sales'
-        loan_details = sales_agent.extract_loan_details(conversation)
+        loan_details = sales_agent.extract_loan_details(conversation, age_segment)
         
         if loan_details and all([
             loan_details.get('loan_amount'),
@@ -313,6 +365,16 @@ def chat(request):
                 requires_upload = True
                 upload_type = 'pan_card'
             else:
+                # Update customer with additional details
+                if loan_details.get('employment_type'):
+                    session.customer.employment_type = loan_details['employment_type']
+                if loan_details.get('monthly_income'):
+                    session.customer.monthly_income = loan_details['monthly_income']
+                session.customer.save()
+                
+                # Refresh age segment with updated data
+                age_segment = get_age_segment(session)
+                
                 # Create loan application
                 loan_app = LoanApplication.objects.create(
                     customer=session.customer,
@@ -326,11 +388,12 @@ def chat(request):
                 workflow_stage = 'salary_verification'
                 current_agent = 'underwriting'
                 
-                # Assess loan
+                # Assess loan with age-aware underwriting
                 assessment = underwriting_agent.assess_loan(
                     session.customer,
                     loan_details['loan_amount'],
-                    loan_details['tenure_months']
+                    loan_details['tenure_months'],
+                    age_segment
                 )
                 
                 if assessment['approved'] == True:
@@ -338,9 +401,9 @@ def chat(request):
                     loan_app.status = 'approved'
                     loan_app.save()
                     
-                    # Generate sanction letter
+                    # Generate sanction letter with segment info
                     try:
-                        sanction_letter = SanctionLetterGenerator.generate_letter(loan_app)
+                        sanction_letter = SanctionLetterGenerator.generate_letter(loan_app, age_segment)
                         loan_app.sanction_letter.save(
                             f'sanction_{loan_app.id}.pdf', 
                             sanction_letter, 
@@ -349,9 +412,10 @@ def chat(request):
                         
                         sanction_letter_url = loan_app.sanction_letter.url
                         
+                        segment_note = f" {assessment.get('segment_note', '')}" if assessment.get('segment_note') else ""
                         response = (
                             f"🎉 Congratulations! Your loan of ₹{loan_details['loan_amount']:,.2f} "
-                            f"has been approved! {assessment['reason']}. "
+                            f"has been approved! {assessment['reason']}.{segment_note} "
                             f"Your sanction letter is ready for download."
                         )
                     except Exception as e:
@@ -372,6 +436,26 @@ def chat(request):
                     )
                     requires_upload = True
                     upload_type = 'salary_slip'
+                
+                elif assessment['approved'] == 'pending_business_docs':
+                    # Requires business documents (for self-employed)
+                    docs_needed = ', '.join(assessment.get('documents_needed', []))
+                    response = (
+                        f"As a self-employed professional, we need additional documentation. "
+                        f"{assessment['reason']}. Please prepare: {docs_needed}. "
+                        f"You can upload your salary slip for now, and we'll guide you through the rest."
+                    )
+                    requires_upload = True
+                    upload_type = 'salary_slip'
+                
+                elif assessment['approved'] == 'pending_guarantor':
+                    # Requires guarantor (for new-to-credit)
+                    response = (
+                        f"{assessment['reason']}. This is standard for first-time borrowers. "
+                        f"For now, please upload your salary slip, and we'll discuss guarantor details."
+                    )
+                    requires_upload = True
+                    upload_type = 'salary_slip'
                     
                 else:
                     # Loan rejected
@@ -385,8 +469,8 @@ def chat(request):
                     session.stage = 'rejected'
                     workflow_stage = 'rejected'
         else:
-            # Continue collecting loan details
-            response = sales_agent.engage_customer(session, conversation)
+            # Continue collecting loan details with age-aware engagement
+            response = sales_agent.engage_customer(session, conversation, age_segment)
     
     elif workflow_stage == 'salary_verification':
         # Waiting for salary slip upload
@@ -400,7 +484,7 @@ def chat(request):
     
     else:
         # Unknown stage - reset to greeting
-        response = "Something went wrong. Let's start over. What's your name?"
+        response = "Something went wrong. Let's start over. What's your name and date of birth?"
         session.stage = 'greeting'
         workflow_stage = 'greeting'
     
@@ -422,6 +506,12 @@ def chat(request):
     
     if sanction_letter_url:
         response_data['sanction_letter_url'] = sanction_letter_url
+    
+    if age_segment:
+        response_data['customer_segment'] = {
+            'segment': age_segment['segment'],
+            'age_group': age_segment['age_group']
+        }
     
     return JsonResponse(response_data)
 
@@ -517,6 +607,7 @@ def upload_pan_card(request):
             # Verification successful
             pan_number = verification_result.get('pan_number')
             name_on_card = verification_result.get('name_on_card')
+            dob_from_pan = verification_result.get('date_of_birth')
             
             # Search for existing customer by PAN
             try:
@@ -527,11 +618,48 @@ def upload_pan_card(request):
                 customer.pan_verified = True
                 customer.pan_verification_confidence = verification_result.get('confidence_score')
                 
+                # Update DOB if found on PAN and not already set
+                if dob_from_pan and not customer.date_of_birth:
+                    try:
+                        from datetime import datetime
+                        customer.date_of_birth = datetime.strptime(dob_from_pan, "%d/%m/%Y").date()
+                    except:
+                        try:
+                            customer.date_of_birth = datetime.strptime(dob_from_pan, "%Y-%m-%d").date()
+                        except:
+                            pass
+                
             except Customer.DoesNotExist:
                 # New customer - create record
+                dob_obj = None
+                
+                # Try to get DOB from temp storage or PAN extraction
+                temp_dob = getattr(session, 'temp_dob', None)
+                if temp_dob:
+                    try:
+                        from datetime import datetime
+                        dob_obj = datetime.strptime(temp_dob, "%Y-%m-%d").date()
+                    except:
+                        try:
+                            dob_obj = datetime.strptime(temp_dob, "%d/%m/%Y").date()
+                        except:
+                            pass
+                
+                # If not in temp storage, try from PAN
+                if not dob_obj and dob_from_pan:
+                    try:
+                        from datetime import datetime
+                        dob_obj = datetime.strptime(dob_from_pan, "%d/%m/%Y").date()
+                    except:
+                        try:
+                            dob_obj = datetime.strptime(dob_from_pan, "%Y-%m-%d").date()
+                        except:
+                            pass
+                
                 customer = Customer.objects.create(
                     name=name_on_card,
                     pan=pan_number,
+                    date_of_birth=dob_obj,
                     pan_verified=True,
                     pan_verification_confidence=verification_result.get('confidence_score'),
                     credit_score=750,  # Default, should fetch from credit bureau
@@ -549,15 +677,38 @@ def upload_pan_card(request):
             session.customer = customer
             session.stage = 'selfie_verification'
             
+            # Get age segment now that we have customer with DOB
+            age_segment = get_age_segment(session)
+            
             # Add verification message to conversation
             conversation = add_message(session, 'assistant', verification_message, 'verification')
             
-            # Request selfie upload
-            selfie_message = (
-                "Great! Your PAN card has been verified successfully. "
-                "For final verification, please take a live selfie using the upload button. "
-                "This helps us ensure the security of your account."
-            )
+            # Request selfie upload with age-aware messaging
+            if age_segment:
+                if age_segment['segment'] == 'Young Salaried Professional':
+                    selfie_message = (
+                        "Excellent! Your PAN card has been verified successfully. "
+                        "For final verification, please take a quick selfie using the upload button. "
+                        "Super fast and secure - just like you prefer! 📸"
+                    )
+                elif age_segment['segment'] == 'Low-Income or New-to-Credit Applicant':
+                    selfie_message = (
+                        "Great! Your PAN card has been verified successfully. "
+                        "For final verification, please take a selfie using the upload button. "
+                        "Don't worry, this is simple and helps us keep your account secure. 😊"
+                    )
+                else:
+                    selfie_message = (
+                        "Great! Your PAN card has been verified successfully. "
+                        "For final verification, please take a live selfie using the upload button. "
+                        "This helps us ensure the security of your account."
+                    )
+            else:
+                selfie_message = (
+                    "Great! Your PAN card has been verified successfully. "
+                    "For final verification, please take a live selfie using the upload button. "
+                    "This helps us ensure the security of your account."
+                )
             
             add_message(session, 'assistant', selfie_message, 'verification')
             session.save()
@@ -571,7 +722,9 @@ def upload_pan_card(request):
                     'pan_number': pan_number,
                     'name': name_on_card,
                     'confidence_score': verification_result.get('confidence_score'),
-                    'is_existing_customer': is_existing
+                    'is_existing_customer': is_existing,
+                    'customer_segment': age_segment['segment'] if age_segment else None,
+                    'age_group': age_segment['age_group'] if age_segment else None
                 },
                 'workflow_stage': 'selfie_verification',
                 'requires_upload': True,
@@ -644,6 +797,9 @@ def upload_salary_slip(request):
                 'message': 'No customer found'
             }, status=400)
         
+        # Get age segment
+        age_segment = get_age_segment(session)
+        
         # Get the most recent loan application for this customer
         loan_app = LoanApplication.objects.filter(
             customer=session.customer
@@ -666,9 +822,9 @@ def upload_salary_slip(request):
         loan_app.status = 'approved'
         loan_app.save()
         
-        # Generate sanction letter
+        # Generate sanction letter with segment info
         try:
-            sanction_letter = SanctionLetterGenerator.generate_letter(loan_app)
+            sanction_letter = SanctionLetterGenerator.generate_letter(loan_app, age_segment)
             loan_app.sanction_letter.save(
                 f'sanction_{loan_app.id}.pdf',
                 sanction_letter,
@@ -677,11 +833,32 @@ def upload_salary_slip(request):
             
             sanction_letter_url = loan_app.sanction_letter.url
             
-            message = (
-                f"🎉 Congratulations! After verifying your salary slip, "
-                f"your loan of ₹{loan_app.loan_amount:,.2f} has been approved! "
-                f"Your sanction letter is ready for download."
-            )
+            # Age-aware approval message
+            if age_segment:
+                if age_segment['segment'] == 'Young Salaried Professional':
+                    message = (
+                        f"🎉 Awesome! After verifying your salary slip, "
+                        f"your loan of ₹{loan_app.loan_amount:,.2f} has been approved! "
+                        f"Fast-tracked just for you. Your sanction letter is ready for download. 📄"
+                    )
+                elif age_segment['segment'] == 'Existing Kite Capital Customer':
+                    message = (
+                        f"🎉 Welcome back! Your loan of ₹{loan_app.loan_amount:,.2f} "
+                        f"has been approved with our fastest process! "
+                        f"Your sanction letter is ready for download. 📄"
+                    )
+                else:
+                    message = (
+                        f"🎉 Congratulations! After verifying your salary slip, "
+                        f"your loan of ₹{loan_app.loan_amount:,.2f} has been approved! "
+                        f"Your sanction letter is ready for download."
+                    )
+            else:
+                message = (
+                    f"🎉 Congratulations! After verifying your salary slip, "
+                    f"your loan of ₹{loan_app.loan_amount:,.2f} has been approved! "
+                    f"Your sanction letter is ready for download."
+                )
             
             # Update session
             session.stage = 'completed'
@@ -693,7 +870,8 @@ def upload_salary_slip(request):
                 'message': message,
                 'sanction_letter_url': sanction_letter_url,
                 'workflow_stage': 'completed',
-                'requires_upload': False
+                'requires_upload': False,
+                'customer_segment': age_segment['segment'] if age_segment else None
             })
             
         except Exception as e:
