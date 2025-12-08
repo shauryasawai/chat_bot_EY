@@ -1,0 +1,17 @@
+# Core Framework
+Django==6.0
+
+# AI/ML - OpenAI Integration
+openai==2.9.0
+
+# Image Processing
+Pillow==12.0.0
+
+# PDF Generation
+reportlab==4.4.5
+
+# Environment Variables
+python-dotenv==1.2.1
+
+# Database (for PostgreSQL)
+psycopg2-binary==2.9.9
