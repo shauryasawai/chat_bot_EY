@@ -811,16 +811,13 @@ python manage.py collectstatic --noinput
 **Team Name:** [Code Crushers]
 
 **Team Members:**
-- **[Shauryaman]** - Team Lead
-- **[Shivang]** - AI/ML Engineer
-- **[Debajyoti]** - Frontend Developer
-- **[Manisha]** - Frontend Developer
-- **[Deepak]** - Database & DevOps
-
-**Mentors:**
-- [Mentor Name] - EY Technology Consultant
-
-**Institution:** [National Institute of Technology, Rourkela]
+- **Shauryaman** - Team Lead
+- **Shivang** - AI/ML Engineer
+- **Debajyoti** - Frontend Developer
+- **Manisha** - Frontend Developer
+- **Deepak** - Database & DevOps
+- 
+**Institution:** National Institute of Technology, Rourkela
 
 ---
 
@@ -831,7 +828,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ```
 MIT License
 
-Copyright (c) 2025 [CODE_CRUSHERS(NIT ROURKELA)]
+Copyright (c) 2025 CODE_CRUSHERS(NIT ROURKELA)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
