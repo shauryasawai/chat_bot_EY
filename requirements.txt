@@ -15,3 +15,5 @@ python-dotenv==1.2.1
 
 # Database (for PostgreSQL)
 psycopg2-binary==2.9.9
+
+dj-database-url==3.0.1
