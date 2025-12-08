@@ -221,7 +221,7 @@ User Inquiry → Master Agent → PAN Verification → Selfie Verification
 git clone https://github.com/shauryasawai/chat_bot_EY
 
 # Navigate to project directory
-cd ai-loan-processing
+cd chat_bot_EY
 ```
 
 ### Step 2: Create Virtual Environment
