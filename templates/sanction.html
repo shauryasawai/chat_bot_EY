@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Loan Sanction Letter - Tata Capital</title>
+  <style>
+    @import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap");
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+      background: linear-gradient(135deg, #0a0e1a 0%, #1a1f2e 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1400px;
+      width: 100%;
+      height: 95vh;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .letter-header {
+      background: linear-gradient(135deg, #005B9F 0%, #0077CC 100%);
+      padding: 20px 30px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .letter-header::before {
+      content: "";
+      position: absolute;
+      top: -50%;
+      right: -10%;
+      width: 200px;
+      height: 200px;
+      background: rgba(255, 230, 0, 0.1);
+      border-radius: 50%;
+    }
+
+    .logo-section {
+      position: relative;
+      z-index: 1;
+      text-align: left;
+    }
+
+    .company-logo {
+      font-size: 28px;
+      font-weight: 800;
+      color: white;
+      letter-spacing: 1px;
+      margin-bottom: 2px;
+    }
+
+    .company-tagline {
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .yellow-bar {
+      height: 4px;
+      background: #FFE600;
+      width: 100%;
+    }
+
+    .letter-content {
+      padding: 25px 40px;
+      color: #2E2E38;
+      line-height: 1.5;
+      flex: 1;
+      overflow-y: auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 25px;
+    }
+
+    .left-column {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+
+    .right-column {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+
+    .ref-number {
+      text-align: right;
+      color: #5A5A66;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .date {
+      color: #5A5A66;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .recipient {
+      font-weight: 600;
+      color: #2E2E38;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .subject {
+      font-weight: 700;
+      color: #005B9F;
+      font-size: 13px;
+    }
+
+    .salutation {
+      font-weight: 600;
+      font-size: 13px;
+    }
+
+    .paragraph {
+      text-align: justify;
+      font-size: 12px;
+      color: #2E2E38;
+      line-height: 1.5;
+    }
+
+    .loan-details {
+      background: #F7F8FA;
+      border-left: 3px solid #FFE600;
+      padding: 15px 20px;
+      border-radius: 6px;
+    }
+
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-bottom: 1px solid #E5E7EB;
+    }
+
+    .detail-row:last-child {
+      border-bottom: none;
+      font-weight: 700;
+      font-size: 13px;
+      color: #005B9F;
+      padding-top: 8px;
+    }
+
+    .detail-label {
+      color: #5A5A66;
+      font-weight: 600;
+      font-size: 11px;
+    }
+
+    .detail-value {
+      color: #2E2E38;
+      font-weight: 600;
+      font-size: 11px;
+    }
+
+    .terms-section {
+      background: #F7F8FA;
+      padding: 15px 20px;
+      border-radius: 6px;
+      border-left: 3px solid #005B9F;
+    }
+
+    .terms-title {
+      font-weight: 700;
+      color: #005B9F;
+      margin-bottom: 10px;
+      font-size: 13px;
+    }
+
+    .terms-list {
+      list-style: none;
+      padding-left: 0;
+    }
+
+    .terms-list li {
+      padding: 4px 0 4px 20px;
+      position: relative;
+      font-size: 11px;
+      color: #2E2E38;
+      line-height: 1.4;
+    }
+
+    .terms-list li::before {
+      content: "•";
+      position: absolute;
+      left: 5px;
+      color: #FFE600;
+      font-size: 16px;
+      font-weight: bold;
+    }
+
+    .signature-section {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-top: auto;
+    }
+
+    .signature-block {
+      width: 45%;
+    }
+
+    .signature-line {
+      border-top: 2px solid #2E2E38;
+      margin-top: 30px;
+      padding-top: 8px;
+    }
+
+    .signature-name {
+      font-weight: 700;
+      color: #2E2E38;
+      font-size: 12px;
+    }
+
+    .signature-title {
+      color: #5A5A66;
+      font-size: 10px;
+      margin-top: 2px;
+    }
+
+    .footer {
+      background: #F0F2F5;
+      padding: 15px 40px;
+      border-top: 1px solid #E5E7EB;
+    }
+
+    .footer-content {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      font-size: 10px;
+      color: #5A5A66;
+    }
+
+    .footer-section {
+      flex: 1;
+    }
+
+    .footer-section div {
+      line-height: 1.4;
+    }
+
+    .footer-title {
+      font-weight: 700;
+      color: #2E2E38;
+      margin-bottom: 4px;
+      font-size: 11px;
+    }
+
+    .congratulations-banner {
+      background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+      color: white;
+      padding: 12px;
+      text-align: center;
+      font-weight: 700;
+      font-size: 14px;
+      letter-spacing: 0.5px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .action-buttons {
+      padding: 15px 40px;
+      display: flex;
+      gap: 12px;
+      background: #F7F8FA;
+      border-top: 1px solid #E5E7EB;
+    }
+
+    .header-right {
+      display: flex;
+      gap: 15px;
+      align-items: center;
+      position: relative;
+      z-index: 1;
+    }
+
+    .event-badge {
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(10px);
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .event-title {
+      font-size: 8px;
+      color: rgba(255, 255, 255, 0.8);
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    .event-name {
+      font-size: 10px;
+      font-weight: 700;
+      color: white;
+      margin-top: 2px;
+    }
+
+    .team-badge {
+      background: #FFE600;
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 10px;
+      font-weight: 700;
+      color: #2E2E38;
+      letter-spacing: 0.3px;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 14px 24px;
+      border-radius: 10px;
+      border: none;
+      font-weight: 700;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #005B9F 0%, #0077CC 100%);
+      color: white;
+      box-shadow: 0 4px 16px rgba(0, 91, 159, 0.3);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 91, 159, 0.4);
+    }
+
+    .btn-secondary {
+      background: white;
+      color: #005B9F;
+      border: 2px solid #005B9F;
+    }
+
+    .btn-secondary:hover {
+      background: #F7F8FA;
+    }
+
+    @media print {
+      body {
+        background: white;
+        padding: 0;
+      }
+      .container {
+        box-shadow: none;
+        border-radius: 0;
+      }
+      .action-buttons {
+        display: none;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .letter-content, .footer, .action-buttons {
+        padding: 30px 25px;
+      }
+      .signature-section {
+        flex-direction: column;
+        gap: 40px;
+      }
+      .signature-block {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="congratulations-banner">
+      🎉 LOAN APPROVED - CONGRATULATIONS! 🎉
+    </div>
+    
+    <div class="letter-header">
+      <div class="logo-section">
+        <div class="company-logo">TATA CAPITAL</div>
+        <div class="company-tagline">Financial Services Limited</div>
+      </div>
+      <div class="header-right">
+        <div class="event-badge">
+          <div class="event-title">Built During</div>
+          <div class="event-name">EY TECHATHON 2024</div>
+        </div>
+        <div class="team-badge">⚡ CODE CRUSHERS</div>
+      </div>
+    </div>
+
+    <div class="yellow-bar"></div>
+
+    <div class="letter-content">
+      <div class="left-column">
+        <div class="ref-number">
+          Ref No: TC/PL/<span id="refNumber">2024/123456</span>
+        </div>
+
+        <div class="date" id="letterDate">
+          Date: December 15, 2024
+        </div>
+
+        <div class="recipient">
+          <div id="customerName">Mr. Shauryaman Sawai</div>
+          <div id="customerAddress">123, Sector-10</div>
+          <div id="customerCity">New Delhi - 110016</div>
+        </div>
+
+        <div class="subject">
+          <strong>Subject:</strong> Sanction of Personal Loan
+        </div>
+
+        <div class="salutation">Dear <span id="salutationName">Mr. Sawai</span>,</div>
+
+        <div class="paragraph">
+          We are pleased to inform you that your application for a Personal Loan with Tata Capital Financial Services Limited has been approved. We thank you for choosing Tata Capital as your financial partner.
+        </div>
+
+        <div class="loan-details">
+          <div class="detail-row">
+            <span class="detail-label">Loan Type:</span>
+            <span class="detail-value">Personal Loan</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Account Number:</span>
+            <span class="detail-value" id="accountNumber">TC2024PL123456</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Sanctioned Amount:</span>
+            <span class="detail-value" id="loanAmount">₹1,50,000</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Interest Rate:</span>
+            <span class="detail-value" id="interestRate">10.99% p.a.</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Loan Tenure:</span>
+            <span class="detail-value" id="tenure">10 months</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Monthly EMI:</span>
+            <span class="detail-value" id="emi">₹12,785</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Processing Fee:</span>
+            <span class="detail-value" id="processingFee">₹10,000 + GST</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Disbursement Amount:</span>
+            <span class="detail-value" id="disbursementAmount">₹4,88,200</span>
+          </div>
+        </div>
+
+        <div class="paragraph">
+          The loan amount will be disbursed to your registered bank account within 2-3 business days upon completion of documentation.
+        </div>
+      </div>
+
+      <div class="right-column">
+        <div class="terms-section">
+          <div class="terms-title">Terms and Conditions:</div>
+          <ul class="terms-list">
+            <li>First EMI due on the 5th of next month following disbursement.</li>
+            <li>EMI payments through NACH/ECS/Standing Instructions.</li>
+            <li>Prepayment charges: 4% + GST on principal (after 12 months, Nil).</li>
+            <li>Late payment: ₹500 per instance + 2% per month on overdue.</li>
+            <li>Subject to terms in the Loan Agreement.</li>
+            <li>Ensure sufficient balance for timely EMI deduction.</li>
+            <li>This sanction is valid for 30 days from letter date.</li>
+          </ul>
+        </div>
+
+        <div class="paragraph">
+          Please visit your nearest Tata Capital branch or contact our customer service team to complete the documentation process. Carry original documents for verification along with this sanction letter.
+        </div>
+
+        <div class="paragraph">
+          For queries, contact our customer care at <strong>1800-209-7700</strong> or email <strong>care@tatacapital.com</strong>
+        </div>
+
+        <div class="paragraph">
+          We look forward to serving you and wish you all the best for your financial goals.
+        </div>
+
+        <div class="signature-section">
+          <div class="signature-block">
+            <div class="signature-line">
+              <div class="signature-name">Authorized Signatory</div>
+              <div class="signature-title">Tata Capital Financial Services Ltd.</div>
+            </div>
+          </div>
+          <div class="signature-block">
+            <div style="text-align: right;">
+              <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='50'%3E%3Ctext x='5' y='35' font-family='Arial' font-size='20' fill='%23005B9F' font-weight='bold'%3EAPPROVED%3C/text%3E%3C/svg%3E" alt="Stamp">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div class="footer-content">
+        <div class="footer-section">
+          <div class="footer-title">Corporate Office</div>
+          <div>11th Floor, Tower A, Peninsula Business Park</div>
+          <div>Ganpatrao Kadam Marg, Lower Parel</div>
+          <div>Mumbai - 400013, Maharashtra</div>
+        </div>
+        <div class="footer-section">
+          <div class="footer-title">Contact Information</div>
+          <div>Phone: 1800-209-7700</div>
+          <div>Email: care@tatacapital.com</div>
+          <div>Website: www.tatacapital.com</div>
+        </div>
+        <div class="footer-section">
+          <div class="footer-title">Legal</div>
+          <div>CIN: U65990MH1991PLC060670</div>
+          <div>RBI Registered NBFC</div>
+          <div>Built during EY Techathon 2024</div>
+          <div style="margin-top: 8px; color: #FFE600; font-weight: 700;">⚡ Team Code Crushers</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="action-buttons">
+      <button class="btn btn-primary" onclick="downloadPDF()">
+        📥 Download PDF
+      </button>
+      <button class="btn btn-secondary" onclick="window.print()">
+        🖨️ Print Letter
+      </button>
+      <button class="btn btn-secondary" onclick="shareViaEmail()">
+        📧 Email Copy
+      </button>
+    </div>
+  </div>
+
+  <script>
+    // Set current date
+    const today = new Date();
+    const formattedDate = today.toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+    document.getElementById('letterDate').textContent = `Date: ${formattedDate}`;
+
+    // Generate reference number
+    const refNum = `2024/${Math.floor(100000 + Math.random() * 900000)}`;
+    document.getElementById('refNumber').textContent = refNum;
+
+    function downloadPDF() {
+      window.print();
+      alert('Please use your browser\'s Print dialog to save as PDF.\n\nSteps:\n1. Click Print\n2. Select "Save as PDF" as destination\n3. Click Save');
+    }
+
+    function shareViaEmail() {
+      const subject = encodeURIComponent('Tata Capital - Loan Sanction Letter');
+      const body = encodeURIComponent('Please find attached your loan sanction letter from Tata Capital.\n\nRef No: TC/PL/' + refNum + '\n\nThank you for choosing Tata Capital!');
+      window.location.href = `mailto:?subject=${subject}&body=${body}`;
+    }
+
+    // You can customize the letter details by calling this function
+    function updateLetterDetails(details) {
+      if (details.customerName) document.getElementById('customerName').textContent = details.customerName;
+      if (details.customerAddress) document.getElementById('customerAddress').textContent = details.customerAddress;
+      if (details.customerCity) document.getElementById('customerCity').textContent = details.customerCity;
+      if (details.salutationName) document.getElementById('salutationName').textContent = details.salutationName;
+      if (details.accountNumber) document.getElementById('accountNumber').textContent = details.accountNumber;
+      if (details.loanAmount) document.getElementById('loanAmount').textContent = details.loanAmount;
+      if (details.interestRate) document.getElementById('interestRate').textContent = details.interestRate;
+      if (details.tenure) document.getElementById('tenure').textContent = details.tenure;
+      if (details.emi) document.getElementById('emi').textContent = details.emi;
+      if (details.processingFee) document.getElementById('processingFee').textContent = details.processingFee;
+      if (details.disbursementAmount) document.getElementById('disbursementAmount').textContent = details.disbursementAmount;
+    }
+
+    // Example usage:
+    // updateLetterDetails({
+    //   customerName: 'Ms. Priya Sharma',
+    //   loanAmount: '₹7,50,000',
+    //   emi: '₹19,178'
+    // });
+  </script>
+</body>
+</html>
