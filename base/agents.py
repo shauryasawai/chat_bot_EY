@@ -487,393 +487,136 @@ class UnderwritingAgent(BaseAgent):
         return False, f"EMI exceeds {max_emi_ratio*100}% of monthly salary"
 
 
-from io import BytesIO
-from datetime import datetime
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.units import inch, cm
-from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT, TA_JUSTIFY
-from django.core.files.base import ContentFile
-
-
 class SanctionLetterGenerator:
-    
-    @staticmethod
-    def draw_header_footer(canvas_obj, doc):
-        """Draw header and footer on each page"""
-        canvas_obj.saveState()
-        width, height = A4
-        
-        # Green success banner at top
-        canvas_obj.setFillColor(colors.HexColor('#10b981'))
-        canvas_obj.rect(0, height - 40, width, 40, fill=True, stroke=False)
-        canvas_obj.setFillColor(colors.white)
-        canvas_obj.setFont("Helvetica-Bold", 11)
-        canvas_obj.drawCentredString(width / 2, height - 25, "🎉 LOAN APPROVED - CONGRATULATIONS! 🎉")
-        
-        # Blue header section
-        canvas_obj.setFillColor(colors.HexColor('#1e40af'))
-        canvas_obj.rect(0, height - 120, width, 80, fill=True, stroke=False)
-        
-        # Company name in white
-        canvas_obj.setFillColor(colors.white)
-        canvas_obj.setFont("Helvetica-Bold", 24)
-        canvas_obj.drawString(40, height - 75, "TATA CAPITAL")
-        canvas_obj.setFont("Helvetica", 10)
-        canvas_obj.drawString(40, height - 92, "Financial Services Limited")
-        
-        # Yellow button on right
-        canvas_obj.setFillColor(colors.HexColor('#fbbf24'))
-        canvas_obj.roundRect(width - 150, height - 95, 120, 30, 5, fill=True, stroke=False)
-        canvas_obj.setFillColor(colors.black)
-        canvas_obj.setFont("Helvetica-Bold", 10)
-        canvas_obj.drawCentredString(width - 90, height - 83, "By: CODE CRUSHERS")
-        
-        canvas_obj.restoreState()
-    
     @staticmethod
     def generate_letter(loan_application, age_segment=None):
-        """Generate professional sanction letter with segment info"""
+        """Generate sanction letter with segment info"""
         try:
-            buffer = BytesIO()
+            from reportlab.pdfgen import canvas
+            from reportlab.lib.pagesizes import letter
+            from reportlab.lib.units import inch
+            import io
+            from django.core.files.base import ContentFile
+            from datetime import datetime
             
-            # Create document with custom margins
-            doc = SimpleDocTemplate(
-                buffer,
-                pagesize=A4,
-                rightMargin=40,
-                leftMargin=40,
-                topMargin=130,
-                bottomMargin=50
-            )
+            buffer = io.BytesIO()
+            p = canvas.Canvas(buffer, pagesize=letter)
+            width, height = letter
             
-            # Container for PDF elements
-            elements = []
+            # Header with background
+            p.setFillColorRGB(0.2, 0.3, 0.6)
+            p.rect(0, height - 100, width, 100, fill=1)
             
-            # Styles
-            styles = getSampleStyleSheet()
+            # Title
+            p.setFillColorRGB(1, 1, 1)
+            p.setFont("Helvetica-Bold", 24)
+            p.drawCentredString(width/2, height - 60, "LOAN SANCTION LETTER")
             
-            # Custom styles
-            ref_style = ParagraphStyle(
-                'RefStyle',
-                parent=styles['Normal'],
-                fontSize=9,
-                textColor=colors.HexColor('#6b7280'),
-                alignment=TA_RIGHT,
-                spaceAfter=20
-            )
+            # Company name
+            p.setFont("Helvetica", 12)
+            p.drawCentredString(width/2, height - 85, "Multi-Agent Loan Processing System")
             
-            date_style = ParagraphStyle(
-                'DateStyle',
-                parent=styles['Normal'],
-                fontSize=10,
-                textColor=colors.HexColor('#374151'),
-                spaceAfter=15
-            )
-            
-            address_style = ParagraphStyle(
-                'AddressStyle',
-                parent=styles['Normal'],
-                fontSize=10,
-                textColor=colors.HexColor('#374151'),
-                spaceAfter=5,
-                leading=14
-            )
-            
-            subject_style = ParagraphStyle(
-                'SubjectStyle',
-                parent=styles['Normal'],
-                fontSize=11,
-                textColor=colors.HexColor('#1e40af'),
-                fontName='Helvetica-Bold',
-                spaceAfter=15,
-                spaceBefore=10
-            )
-            
-            body_style = ParagraphStyle(
-                'BodyStyle',
-                parent=styles['Normal'],
-                fontSize=10,
-                textColor=colors.HexColor('#374151'),
-                spaceAfter=12,
-                leading=15,
-                alignment=TA_JUSTIFY
-            )
-            
-            # Reference number
-            ref_number = f"Ref No: KCPL/{datetime.now().year}/LA{loan_application.id:06d}"
-            elements.append(Paragraph(ref_number, ref_style))
+            # Reset to black for content
+            p.setFillColorRGB(0, 0, 0)
             
             # Date
-            elements.append(Paragraph(
-                f"Date: {datetime.now().strftime('%B %d, %Y')}",
-                date_style
-            ))
+            p.setFont("Helvetica", 10)
+            current_date = datetime.now().strftime("%B %d, %Y")
+            p.drawString(inch, height - 130, f"Date: {current_date}")
             
-            # Applicant details
-            applicant_name = loan_application.customer.name
-            elements.append(Paragraph(f"<b>{applicant_name}</b>", address_style))
+            # Customer details section
+            y = height - 180
+            p.setFont("Helvetica-Bold", 14)
+            p.drawString(inch, y, "Customer Details:")
             
-            # Add address if available
-            if hasattr(loan_application.customer, 'address') and loan_application.customer.address:
-                elements.append(Paragraph(loan_application.customer.address, address_style))
-            else:
-                elements.append(Paragraph("123, Sector-10", address_style))
-                elements.append(Paragraph("New Delhi - 110016", address_style))
+            y -= 30
+            p.setFont("Helvetica", 11)
+            p.drawString(inch, y, f"Name: {loan_application.customer.name}")
+            y -= 20
+            p.drawString(inch, y, f"Application ID: LA-{loan_application.id:06d}")
+            y -= 20
+            p.drawString(inch, y, f"PAN: {loan_application.customer.pan}")
+            y -= 20
             
             # Add segment info if available
             if age_segment:
-                segment_text = f"<i>Customer Profile: {age_segment['segment']} | Age Group: {age_segment['age_group']}</i>"
-                segment_style = ParagraphStyle(
-                    'SegmentStyle',
-                    parent=address_style,
-                    fontSize=9,
-                    textColor=colors.HexColor('#6b7280'),
-                    fontName='Helvetica-Oblique'
-                )
-                elements.append(Paragraph(segment_text, segment_style))
+                p.setFont("Helvetica", 10)
+                p.setFillColorRGB(0.2, 0.3, 0.6)
+                p.drawString(inch, y, f"Customer Profile: {age_segment['segment']} (Age: {age_segment['age_group']})")
+                y -= 20
             
-            elements.append(Spacer(1, 0.2 * inch))
+            p.setFont("Helvetica-Bold", 10)
+            p.setFillColorRGB(0, 0.5, 0)
+            p.drawString(inch, y, "✓ KYC Verified with Document Authentication")
+            p.setFillColorRGB(0, 0, 0)
             
-            # Subject
-            elements.append(Paragraph(
-                "<b>Subject: Sanction of Personal Loan</b>",
-                subject_style
-            ))
+            # Loan details section
+            y -= 40
+            p.setFont("Helvetica-Bold", 14)
+            p.drawString(inch, y, "Loan Details:")
             
-            # Salutation
-            first_name = applicant_name.split()[0] if applicant_name else 'Customer'
-            elements.append(Paragraph(
-                f"Dear {first_name},",
-                body_style
-            ))
+            y -= 30
+            p.setFont("Helvetica", 11)
+            p.drawString(inch, y, f"Sanctioned Amount: ₹{loan_application.loan_amount:,.2f}")
+            y -= 20
+            p.drawString(inch, y, f"Tenure: {loan_application.tenure_months} months")
+            y -= 20
+            p.drawString(inch, y, f"Purpose: {loan_application.purpose}")
             
-            # Body text
-            elements.append(Paragraph(
-                f"We are pleased to inform you that your application for a Personal Loan with TATA CAPITAL Financial Services Limited "
-                f"has been approved. We thank you for choosing TATA CAPITAL as your financial partner.",
-                body_style
-            ))
+            # EMI Calculation
+            monthly_emi = float(loan_application.loan_amount) / loan_application.tenure_months
+            y -= 20
+            p.drawString(inch, y, f"Estimated Monthly EMI: ₹{monthly_emi:,.2f}")
             
-            # Add KYC verified note
-            kyc_style = ParagraphStyle(
-                'KYCStyle',
-                parent=body_style,
-                textColor=colors.HexColor('#10b981'),
-                fontName='Helvetica-Bold'
-            )
-            elements.append(Paragraph(
-                "✓ KYC Verified with AI-Powered Document Authentication",
-                kyc_style
-            ))
-            elements.append(Spacer(1, 0.15 * inch))
+            # Approval message
+            y -= 50
+            p.setFont("Helvetica-Bold", 13)
+            p.setFillColorRGB(0, 0.5, 0)
+            p.drawString(inch, y, "✓ LOAN APPROVED")
             
-            # Calculate values
-            loan_amount = float(loan_application.loan_amount)
-            tenure_months = loan_application.tenure_months
+            # Terms and conditions
+            y -= 40
+            p.setFillColorRGB(0, 0, 0)
+            p.setFont("Helvetica-Bold", 12)
+            p.drawString(inch, y, "Terms & Conditions:")
             
-            # Get interest rate from loan_application or use default
-            if hasattr(loan_application, 'interest_rate') and loan_application.interest_rate:
-                interest_rate = float(loan_application.interest_rate)
-            else:
-                interest_rate = 10.99
-            
-            # Calculate EMI
-            monthly_rate = interest_rate / 12 / 100
-            if monthly_rate > 0:
-                emi = loan_amount * monthly_rate * ((1 + monthly_rate) ** tenure_months) / (((1 + monthly_rate) ** tenure_months) - 1)
-            else:
-                emi = loan_amount / tenure_months
-            
-            processing_fee = loan_amount * 0.02  # 2% processing fee
-            disbursement_amount = loan_amount - processing_fee
-            
-            # Account number
-            account_number = f"KC{datetime.now().year}4PL{loan_application.id:06d}"
-            
-            # Loan details table (yellow box)
-            loan_data = [
-                ['Loan Type:', 'Personal Loan'],
-                ['Application ID:', f'LA-{loan_application.id:06d}'],
-                ['Account Number:', account_number],
-                ['PAN Number:', loan_application.customer.pan],
-                ['Sanctioned Amount:', f'Rs{loan_amount:,.0f}'],
-                ['Interest Rate:', f'{interest_rate}% p.a.'],
-                ['Loan Tenure:', f'{tenure_months} months'],
-                ['Purpose:', loan_application.purpose],
-                ['Monthly EMI:', f'Rs{emi:,.0f}'],
-                ['Processing Fee:', f'Rs{processing_fee:,.0f} + GST'],
-                ['Disbursement Amount:', f'Rs{disbursement_amount:,.0f}'],
-            ]
-            
-            # Create table with yellow background
-            table = Table(loan_data, colWidths=[2.2 * inch, 3.5 * inch])
-            table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#fffbeb')),
-                ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#78716c')),
-                ('TEXTCOLOR', (1, 0), (1, -1), colors.HexColor('#1f2937')),
-                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                ('FONTNAME', (0, 0), (0, -1), 'Helvetica'),
-                ('FONTNAME', (1, 0), (1, -1), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, -1), 10),
-                ('LEFTPADDING', (0, 0), (-1, -1), 15),
-                ('RIGHTPADDING', (0, 0), (-1, -1), 15),
-                ('TOPPADDING', (0, 0), (-1, -1), 8),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('BOX', (0, 0), (-1, -1), 1, colors.HexColor('#fbbf24')),
-            ]))
-            
-            elements.append(table)
-            elements.append(Spacer(1, 0.15 * inch))
-            
-            # Disbursement note
-            elements.append(Paragraph(
-                "The loan amount will be disbursed to your registered bank account within 2-3 business days upon completion of documentation.",
-                body_style
-            ))
-            elements.append(Spacer(1, 0.25 * inch))
-            
-            # Terms and Conditions
-            elements.append(Paragraph("<b>Terms and Conditions:</b>", subject_style))
-            
-            terms_style = ParagraphStyle(
-                'TermsStyle',
-                parent=styles['Normal'],
-                fontSize=9,
-                textColor=colors.HexColor('#4b5563'),
-                leftIndent=10,
-                spaceAfter=4,
-                leading=13
-            )
-            
+            y -= 25
+            p.setFont("Helvetica", 9)
             terms = [
-                "• First EMI due on the 5th of next month following disbursement.",
-                "• EMI payments through NACH/ECS/Standing instructions.",
-                "• Prepayment charges: 4% + GST on principal after 12 months, NIL thereafter.",
-                "• Late payment: Rs500 per instance + 2% per month on overdue.",
-                "• Subject to terms in the Loan Agreement.",
-                "• Ensure sufficient balance for timely EMI deduction.",
-                "• This sanction is valid for 30 days from letter date.",
-                "• All documents verified using secure AI-powered verification system.",
+                "1. This sanction letter is valid for 30 days from the date of issue.",
+                "2. Interest rate will be communicated separately as per prevailing rates.",
+                "3. Processing fee and other charges apply as per bank policy.",
+                "4. Complete documentation must be submitted within 15 days.",
+                "5. The bank reserves the right to cancel this sanction at any time.",
+                "6. All documents have been verified using secure AI-powered verification.",
+                "7. Loan terms customized based on customer profile and creditworthiness."
             ]
-            
-            # Add segment-specific terms if available
-            if age_segment:
-                terms.append(f"• Loan terms customized for {age_segment['segment']} profile.")
             
             for term in terms:
-                elements.append(Paragraph(term, terms_style))
+                p.drawString(inch, y, term)
+                y -= 15
             
-            elements.append(Spacer(1, 0.15 * inch))
+            # Footer
+            y = inch
+            p.drawCentredString(width/2, y, "This is a system generated document. No signature required.")
+            p.drawCentredString(width/2, y - 12, "For queries, contact: support@loanprocessing.com | Phone: 1800-XXX-XXXX")
             
-            # Visit branch note
-            elements.append(Paragraph(
-                "Please visit your nearest TATA CAPITAL branch or contact our customer service team to complete the "
-                "documentation process. Carry original documents for verification along with this sanction letter.",
-                body_style
-            ))
-            elements.append(Spacer(1, 0.1 * inch))
+            # Draw a border
+            p.setStrokeColorRGB(0.2, 0.3, 0.6)
+            p.setLineWidth(2)
+            p.rect(0.5*inch, 0.5*inch, width - inch, height - inch, fill=0)
             
-            # Contact info
-            contact_style = ParagraphStyle(
-                'ContactStyle',
-                parent=styles['Normal'],
-                fontSize=9,
-                textColor=colors.HexColor('#374151'),
-                spaceAfter=8
-            )
-            
-            elements.append(Paragraph(
-                "For queries, contact our customer care at <b>1800-209-7700</b> or email <b>care@TATA_CAPITAL.com</b>",
-                contact_style
-            ))
-            
-            elements.append(Paragraph(
-                "We look forward to serving you and wish you all the best for your financial goals.",
-                body_style
-            ))
-            elements.append(Spacer(1, 0.3 * inch))
-            
-            # Signature section
-            sig_data = [
-                ['', ''],
-                ['Authorized Signatory', '<b>APPROVED</b>'],
-                ['TATA_CAPITAL Financial Services Ltd.', '']
-            ]
-            
-            sig_table = Table(sig_data, colWidths=[3 * inch, 2.5 * inch])
-            sig_table.setStyle(TableStyle([
-                ('ALIGN', (0, 0), (0, -1), 'LEFT'),
-                ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
-                ('FONTNAME', (0, 1), (0, 1), 'Helvetica-Bold'),
-                ('FONTNAME', (1, 1), (1, 1), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 1), (0, 1), 10),
-                ('FONTSIZE', (1, 1), (1, 1), 16),
-                ('TEXTCOLOR', (1, 1), (1, 1), colors.HexColor('#1e40af')),
-                ('FONTSIZE', (0, 2), (0, 2), 8),
-                ('TEXTCOLOR', (0, 2), (0, 2), colors.HexColor('#6b7280')),
-                ('LINEABOVE', (0, 1), (0, 1), 1, colors.HexColor('#d1d5db')),
-                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ]))
-            
-            elements.append(sig_table)
-            elements.append(Spacer(1, 0.3 * inch))
-            
-            # Footer information
-            footer_style = ParagraphStyle(
-                'FooterStyle',
-                parent=styles['Normal'],
-                fontSize=8,
-                textColor=colors.HexColor('#6b7280'),
-                spaceAfter=3,
-                leading=11
-            )
-            
-            elements.append(Paragraph("<b>Corporate Office</b>", footer_style))
-            elements.append(Paragraph(
-                "7th Floor, Tower A, Peninsula Business Park<br/>"
-                "Ganpatrao Kadam Marg, Lower Parel<br/>"
-                "Mumbai - 400013, Maharashtra",
-                footer_style
-            ))
-            elements.append(Spacer(1, 0.1 * inch))
-            
-            elements.append(Paragraph("<b>Contact Information</b>", footer_style))
-            elements.append(Paragraph(
-                "Phone: 1800-209-7700<br/>"
-                "Email: care@TATA_CAPITAL.com<br/>"
-                "Website: www.TATA_CAPITALcapital.com",
-                footer_style
-            ))
-            elements.append(Spacer(1, 0.1 * inch))
-            
-            elements.append(Paragraph("<b>Legal</b>", footer_style))
-            elements.append(Paragraph(
-                f"CIN: U65929MH1995PLC086970<br/>"
-                f"RBI Registered NBFC<br/>"
-                f"Built during Technathon 6.0",
-                footer_style
-            ))
-            
-            # Build PDF with header/footer
-            doc.build(
-                elements, 
-                onFirstPage=SanctionLetterGenerator.draw_header_footer, 
-                onLaterPages=SanctionLetterGenerator.draw_header_footer
-            )
+            p.showPage()
+            p.save()
             
             buffer.seek(0)
-            return ContentFile(
-                buffer.read(), 
-                name=f'sanction_letter_LA{loan_application.id:06d}.pdf'
-            )
+            return ContentFile(buffer.read(), name=f'sanction_letter_{loan_application.id}.pdf')
         
         except Exception as e:
             print(f"Error generating sanction letter: {str(e)}")
-            raise e
+            raise(e)
+        except:
+            return {"name": "NOT_FOUND", "date_of_birth": "NOT_FOUND"}
 
 
 class FaceMatchAgent(BaseAgent):
@@ -1208,169 +951,84 @@ class PANVerificationAgent(BaseAgent):
 class SalesAgent(BaseAgent):
     def __init__(self):
         super().__init__("Sales Agent", "Lead Qualification")
-        self.question_flow = [
-            "loan_amount",
-            "purpose",
-            "tenure",
-            "employment_details",
-            "income_details",
-            "additional_info"
-        ]
-    
-    def get_next_question_stage(self, conversation_history, extracted_details):
-        """Determine which question to ask next based on what's already collected"""
-        
-        # Check what information we already have
-        has_loan_amount = extracted_details.get('loan_amount') is not None
-        has_purpose = extracted_details.get('purpose') is not None
-        has_tenure = extracted_details.get('tenure_months') is not None
-        has_employment = extracted_details.get('employment_type') is not None
-        has_income = extracted_details.get('monthly_income') is not None
-        
-        # Return the next missing piece of information
-        if not has_loan_amount:
-            return "loan_amount"
-        elif not has_purpose:
-            return "purpose"
-        elif not has_tenure:
-            return "tenure"
-        elif not has_employment:
-            return "employment_details"
-        elif not has_income:
-            return "income_details"
-        else:
-            return "complete"
-    
-    def get_segment_specific_guidance(self, age_segment, question_stage):
-        """Get segment-specific guidance for current question"""
-        
-        if not age_segment:
-            return ""
-        
-        guidance = {
-            "loan_amount": {
-                "Young Salaried Professional": "Typically need ₹50K-₹3L for gadgets, travel, education",
-                "Mid-Career Salaried with Family": "Usually need ₹2L-₹10L for education, medical, home renovation",
-                "Self-Employed": "Often need ₹1L-₹15L for business or personal needs",
-                "Low-Income or New-to-Credit": "Generally need ₹20K-₹2L for essential needs",
-                "Existing Kite Capital Customer": "May qualify for higher amounts based on history"
-            },
-            "purpose": {
-                "Young Salaried Professional": "Common: gadgets, travel, courses, emergency",
-                "Mid-Career Salaried with Family": "Common: children's education, medical, wedding, debt consolidation",
-                "Self-Employed": "Common: working capital, expansion, equipment, personal emergency",
-                "Low-Income or New-to-Credit": "Common: education, vehicle, emergency, settling in new city",
-                "Existing Kite Capital Customer": "Quick verification for repeat/top-up loans"
-            },
-            "tenure": {
-                "Young Salaried Professional": "Prefer shorter tenures: 6-24 months",
-                "Mid-Career Salaried with Family": "Prefer longer tenures for lower EMI: 12-48 months",
-                "Self-Employed": "Flexible based on cash flow: 6-36 months",
-                "Low-Income or New-to-Credit": "Shorter tenures recommended: 6-18 months",
-                "Existing Kite Capital Customer": "Can leverage previous good payment history"
-            },
-            "employment_details": {
-                "Young Salaried Professional": "Ask about company type, designation, experience",
-                "Mid-Career Salaried with Family": "Ask about company stability, years of service",
-                "Self-Employed": "Ask about business type, vintage, GST registration",
-                "Low-Income or New-to-Credit": "Ask about job type (gig/entry-level), stability",
-                "Existing Kite Capital Customer": "Quick verification only"
-            },
-            "income_details": {
-                "Young Salaried Professional": "Monthly take-home salary",
-                "Mid-Career Salaried with Family": "Monthly income and existing EMI obligations",
-                "Self-Employed": "Monthly/Annual turnover, profit margins",
-                "Low-Income or New-to-Credit": "Monthly income, reassure about eligibility",
-                "Existing Kite Capital Customer": "Verify if income has changed"
-            }
-        }
-        
-        segment = age_segment.get('segment', '')
-        for key in guidance[question_stage].keys():
-            if key in segment:
-                return guidance[question_stage][key]
-        
-        return ""
     
     def engage_customer(self, session, conversation_history, age_segment=None):
-        """Engage customer with one question at a time"""
+        """Engage customer with age-segment-aware questions"""
         
-        # First, extract what we already know from conversation
-        current_details = self.extract_loan_details(conversation_history, age_segment)
-        
-        # Determine next question to ask
-        next_stage = self.get_next_question_stage(conversation_history, current_details)
-        
-        # If all information collected, acknowledge and move to next step
-        if next_stage == "complete":
-            return self._generate_completion_message(current_details, age_segment)
-        
-        # Build segment context
+        # Build segment-specific context
         segment_context = ""
+        questions_focus = []
+        
         if age_segment:
             segment_context = f"""
 Customer Profile:
 - Segment: {age_segment['segment']}
 - Age Group: {age_segment['age_group']}
 - Typical Needs: {', '.join(age_segment.get('needs', []))}
+- Behavior: {', '.join(age_segment.get('behaviour', []))}
 
-Segment Guidance: {self.get_segment_specific_guidance(age_segment, next_stage)}
-"""
+Tailor your questions based on this profile. """
+            
+            questions_focus = age_segment.get('questions_focus', [])
+            
+            # Add segment-specific question guidance
+            if 'Young Salaried Professional' in age_segment['segment']:
+                segment_context += """
+Ask about:
+- Employment details (company type, designation)
+- Monthly take-home salary
+- Loan purpose (gadgets, travel, education, emergency)
+- Preferred digital payment methods
+- Quick EMI affordability check"""
+            
+            elif 'Mid-Career Salaried with Family' in age_segment['segment']:
+                segment_context += """
+Ask about:
+- Family size and dependents
+- Monthly income and existing EMI obligations
+- Purpose (children's education, medical, home renovation, wedding, debt consolidation)
+- Home ownership status
+- Preferred loan tenure for budget planning"""
+            
+            elif 'Self-Employed' in age_segment['segment']:
+                segment_context += """
+Ask about:
+- Type of business/profession
+- Business vintage (years in operation)
+- Monthly/Annual turnover
+- Purpose (working capital, expansion, equipment, personal emergency)
+- GST registration and ITR filing status
+- Business documentation availability"""
+            
+            elif 'Low-Income or New-to-Credit' in age_segment['segment']:
+                segment_context += """
+Ask about:
+- Current employment (gig work, entry-level, first job)
+- Monthly income
+- Loan amount needed (keep it realistic for their profile)
+- Purpose (education, vehicle, emergency, settling in new city)
+- Any guarantor availability
+- Reassure them about the process"""
+            
+            elif 'Existing Kite Capital Customer' in age_segment['segment']:
+                segment_context += """
+Ask about:
+- Previous loan experience with us
+- Top-up requirement or new loan
+- Quick verification of pre-approved limit
+- Purpose (should be brief)
+- Preferred fast-track options"""
         
-        # Build question-specific prompt
-        question_prompts = {
-            "loan_amount": f"""You are asking about the loan amount.{segment_context}
+        system_prompt = f"""You are a Sales Agent for personal loans.{segment_context}
 
-Ask the customer how much loan amount they need. Be conversational and natural.
-If they mention a range, help them narrow it down.
-Make them feel comfortable about the amount they're requesting.""",
-            
-            "purpose": f"""You are asking about the loan purpose.{segment_context}
+Ask the customer about:
+1. Loan amount needed
+2. Purpose of the loan  
+3. Preferred tenure (in months)
+4. Any other relevant details based on their profile
 
-The customer needs a loan of ₹{current_details.get('loan_amount', 'X')}.
-Ask them what they need this loan for. Be empathetic and understanding.
-Show interest in their needs without being intrusive.""",
-            
-            "tenure": f"""You are asking about preferred loan tenure.{segment_context}
-
-The customer needs ₹{current_details.get('loan_amount', 'X')} for {current_details.get('purpose', 'their needs')}.
-Ask them how many months they'd like to repay over. 
-Suggest options based on their segment (e.g., 6, 12, 18, 24 months) and help them choose.""",
-            
-            "employment_details": f"""You are asking about employment details.{segment_context}
-
-Ask about their employment type and details:
-- If salaried: company type, designation
-- If self-employed: business type, years in operation
-- If gig worker: type of work, stability
-
-Be natural and conversational.""",
-            
-            "income_details": f"""You are asking about income details.{segment_context}
-
-Ask about their monthly income or earnings.
-- For salaried: monthly take-home salary
-- For self-employed: monthly/annual turnover
-- Also ask about any existing loan EMIs if relevant
-
-Be tactful and reassuring.""",
-            
-            "additional_info": f"""You are wrapping up information gathering.{segment_context}
-
-Ask if there's anything else they'd like to share that might help with the loan application.
-Examples: guarantor availability, documentation ready, urgency, etc.
-Keep it brief and optional."""
-        }
-        
-        system_prompt = question_prompts.get(next_stage, question_prompts["loan_amount"])
-        system_prompt += """
-
-IMPORTANT: 
-- Ask only ONE question at a time
-- Wait for their response before moving to the next question
-- Be conversational, warm, and empathetic
-- Acknowledge their previous answers naturally
-- Don't list multiple questions"""
+Be conversational, empathetic, and helpful. Extract information naturally.
+Make them feel comfortable and understood."""
         
         messages = [{"role": "system", "content": system_prompt}]
         
@@ -1378,21 +1036,6 @@ IMPORTANT:
             messages.append({"role": msg['role'], "content": msg['content']})
         
         return self.call_openai(messages)
-    
-    def _generate_completion_message(self, details, age_segment):
-        """Generate a message when all information is collected"""
-        
-        summary = f"""Thank you for sharing all the details! Let me summarize:
-
-- Loan Amount: Rs{details['loan_amount']:,}
-- Purpose: {details['purpose']}
-- Tenure: {details['tenure_months']} months
-- Employment: {details['employment_type']}
-- Monthly Income: Rs{details['monthly_income']:,}
-
-I'll now process this information and check your eligibility. Our Credit Risk Agent will review your application shortly."""
-        
-        return summary
     
     def extract_loan_details(self, conversation_history, age_segment=None):
         """Extract loan details with segment-aware parsing"""
@@ -1415,8 +1058,7 @@ I'll now process this information and check your eligibility. Our Credit Risk Ag
                 "segment_specific_data": {{}} (any additional relevant info)
             }}
             
-            If any information is missing, return null for that field.
-            Only extract information that has been explicitly mentioned."""}
+            If any information is missing, return null for that field."""}
         ]
         
         conversation_text = "\n".join([f"{msg['role']}: {msg['content']}" for msg in conversation_history])

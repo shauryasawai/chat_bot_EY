@@ -186,6 +186,18 @@ class LoanApplication(models.Model):
     rejected_at = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
     
+
+    # Salary slip storage
+    salary_slip_name = models.CharField(max_length=255, blank=True, null=True)
+    salary_slip_content = models.TextField(blank=True, null=True)  # base64 encoded
+    salary_slip_content_type = models.CharField(max_length=100, blank=True, null=True)
+    salary_slip_size = models.IntegerField(blank=True, null=True)
+    
+    # Sanction letter storage
+    sanction_letter_name = models.CharField(max_length=255, blank=True, null=True)
+    sanction_letter_content = models.TextField(blank=True, null=True)  # base64 encoded
+    sanction_letter_content_type = models.CharField(max_length=100, blank=True, null=True)
+    
     def save(self, *args, **kwargs):
         """Auto-populate segment snapshot on creation"""
         if not self.pk and self.customer:  # Only on creation

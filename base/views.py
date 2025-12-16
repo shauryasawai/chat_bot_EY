@@ -426,8 +426,6 @@ def chat(request):
                             save=True
                         )
                         
-                        sanction_letter_url = loan_app.sanction_letter.url
-                        
                         segment_note = f" {assessment.get('segment_note', '')}" if assessment.get('segment_note') else ""
                         response = (
                             f"🎉 Congratulations! Your loan of ₹{loan_details['loan_amount']:,.2f} "
@@ -521,7 +519,7 @@ def chat(request):
         response_data['upload_type'] = upload_type
     
     if sanction_letter_url:
-        response_data['sanction_letter_url'] = sanction_letter_url
+        response_data['loan_id'] = loan_app.id
     
     if age_segment:
         response_data['customer_segment'] = {
@@ -785,7 +783,6 @@ def upload_pan_card(request):
             'error_details': str(e)
         }, status=500)
 
-
 @csrf_exempt
 @require_http_methods(["POST"])
 def upload_salary_slip(request):
@@ -840,18 +837,15 @@ def upload_salary_slip(request):
                 'message': 'No loan application found'
             }, status=400)
         
-        # Convert salary slip to base64 and store in memory
-        salary_slip.seek(0)  # Reset file pointer to beginning
-        salary_slip_content = salary_slip.read()
-        salary_slip_base64 = base64.b64encode(salary_slip_content).decode('utf-8')
+        # Read and encode file content to base64 for storage in database
+        file_content = salary_slip.read()
+        encoded_content = base64.b64encode(file_content).decode('utf-8')
         
-        # Store in memory with metadata
-        loan_app.salary_slip_data = {
-            'filename': salary_slip.name,
-            'content_type': salary_slip.content_type,
-            'size': salary_slip.size,
-            'data': salary_slip_base64
-        }
+        # Store in memory (database fields)
+        loan_app.salary_slip_name = salary_slip.name
+        loan_app.salary_slip_content = encoded_content
+        loan_app.salary_slip_content_type = salary_slip.content_type
+        loan_app.salary_slip_size = salary_slip.size
         
         # TODO: Add AI-powered salary slip verification here
         # For now, assume verification passes and approve loan
@@ -863,20 +857,14 @@ def upload_salary_slip(request):
         try:
             sanction_letter = SanctionLetterGenerator.generate_letter(loan_app, age_segment)
             
-            # Store sanction letter in memory as base64
-            sanction_letter.seek(0)
+            # Store sanction letter in memory as well
             sanction_letter_content = sanction_letter.read()
-            sanction_letter_base64 = base64.b64encode(sanction_letter_content).decode('utf-8')
+            encoded_sanction = base64.b64encode(sanction_letter_content).decode('utf-8')
             
-            loan_app.sanction_letter_data = {
-                'filename': f'sanction_{loan_app.id}.pdf',
-                'content_type': 'application/pdf',
-                'data': sanction_letter_base64
-            }
+            loan_app.sanction_letter_name = f'sanction_{loan_app.id}.pdf'
+            loan_app.sanction_letter_content = encoded_sanction
+            loan_app.sanction_letter_content_type = 'application/pdf'
             loan_app.save()
-            
-            # Create a data URL for frontend access
-            sanction_letter_url = f'data:application/pdf;base64,{sanction_letter_base64}'
             
             # Age-aware approval message
             if age_segment:
@@ -913,7 +901,7 @@ def upload_salary_slip(request):
             return JsonResponse({
                 'success': True,
                 'message': message,
-                'sanction_letter_url': sanction_letter_url,
+                'loan_id': loan_app.id,
                 'workflow_stage': 'completed',
                 'requires_upload': False,
                 'customer_segment': age_segment['segment'] if age_segment else None
@@ -959,11 +947,6 @@ def download_sanction_letter(request, loan_id):
     try:
         # Get loan application
         loan_application = get_object_or_404(LoanApplication, id=loan_id)
-        
-        # Security check - ensure user owns this loan
-        if hasattr(loan_application, 'customer') and hasattr(loan_application.customer, 'user'):
-            if loan_application.customer.user != request.user:
-                raise Http404("Sanction letter not found")
         
         # Generate PDF
         pdf_file = SanctionLetterGenerator.generate_letter(loan_application)
