@@ -1342,11 +1342,12 @@
       const downloadText = currentLanguage === 'hi' 
         ? '📥 स्वीकृति पत्र डाउनलोड करें'
         : '📥 Download Sanction Letter';
-      
+
+      const downloadUrl = `/download_sanction_letter/${loanId}/`;
       div.innerHTML = `
         <h3>${title}</h3>
         <p>${message}</p>
-        <a href="${url}" class="download-link" download>${downloadText}</a>
+        <a href="${downloadUrl}" class="download-link" download>${downloadText}</a>
       `;
       const container = document.getElementById("messagesContainer");
       container.insertBefore(div, document.getElementById("typingIndicator"));

@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-f90!az1(a&f0*8p_af@f6#)qeig^78yg%zs4pe*d3%gt$&c_wn
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-ALLOWED_HOSTS = ['chat-bot-ey.vercel.app','127.0.0.1','127.0.0.1:8000']
+ALLOWED_HOSTS = ['chat-bot-ey.vercel.app','127.0.0.1','127.0.0.1:8000','*']
 CSRF_TRUSTED_ORIGINS = [
     'http://localhost:8000',
     'http://127.0.0.1:8000',

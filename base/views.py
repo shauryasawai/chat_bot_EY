@@ -1,7 +1,7 @@
-from django.http import JsonResponse, FileResponse, Http404
+from django.http import HttpResponse, JsonResponse, FileResponse, Http404
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-from django.shortcuts import render
+from django.shortcuts import get_object_or_404, render
 from django.core.files.storage import default_storage
 import json
 from .models import ChatSession, Customer, LoanApplication
@@ -956,20 +956,26 @@ def set_language(request):
 
 @csrf_exempt
 def download_sanction_letter(request, loan_id):
-    """Download sanction letter PDF"""
     try:
-        loan_app = LoanApplication.objects.get(id=loan_id)
+        # Get loan application
+        loan_application = get_object_or_404(LoanApplication, id=loan_id)
         
-        if not loan_app.sanction_letter:
-            raise Http404("Sanction letter not found")
+        # Security check - ensure user owns this loan
+        if hasattr(loan_application, 'customer') and hasattr(loan_application.customer, 'user'):
+            if loan_application.customer.user != request.user:
+                raise Http404("Sanction letter not found")
         
-        response = FileResponse(
-            loan_app.sanction_letter.open('rb'),
-            content_type='application/pdf'
-        )
-        response['Content-Disposition'] = f'attachment; filename="sanction_letter_{loan_id}.pdf"'
+        # Generate PDF
+        pdf_file = SanctionLetterGenerator.generate_letter(loan_application)
+        
+        # Return as downloadable response
+        response = HttpResponse(pdf_file.read(), content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="Sanction_Letter_LA{loan_id:06d}.pdf"'
         
         return response
         
     except LoanApplication.DoesNotExist:
         raise Http404("Loan application not found")
+    except Exception as e:
+        print(f"Error generating sanction letter: {str(e)}")
+        return HttpResponse("Error generating sanction letter", status=500)

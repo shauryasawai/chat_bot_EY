@@ -487,136 +487,393 @@ class UnderwritingAgent(BaseAgent):
         return False, f"EMI exceeds {max_emi_ratio*100}% of monthly salary"
 
 
+from io import BytesIO
+from datetime import datetime
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import inch, cm
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT, TA_JUSTIFY
+from django.core.files.base import ContentFile
+
+
 class SanctionLetterGenerator:
+    
+    @staticmethod
+    def draw_header_footer(canvas_obj, doc):
+        """Draw header and footer on each page"""
+        canvas_obj.saveState()
+        width, height = A4
+        
+        # Green success banner at top
+        canvas_obj.setFillColor(colors.HexColor('#10b981'))
+        canvas_obj.rect(0, height - 40, width, 40, fill=True, stroke=False)
+        canvas_obj.setFillColor(colors.white)
+        canvas_obj.setFont("Helvetica-Bold", 11)
+        canvas_obj.drawCentredString(width / 2, height - 25, "🎉 LOAN APPROVED - CONGRATULATIONS! 🎉")
+        
+        # Blue header section
+        canvas_obj.setFillColor(colors.HexColor('#1e40af'))
+        canvas_obj.rect(0, height - 120, width, 80, fill=True, stroke=False)
+        
+        # Company name in white
+        canvas_obj.setFillColor(colors.white)
+        canvas_obj.setFont("Helvetica-Bold", 24)
+        canvas_obj.drawString(40, height - 75, "TATA CAPITAL")
+        canvas_obj.setFont("Helvetica", 10)
+        canvas_obj.drawString(40, height - 92, "Financial Services Limited")
+        
+        # Yellow button on right
+        canvas_obj.setFillColor(colors.HexColor('#fbbf24'))
+        canvas_obj.roundRect(width - 150, height - 95, 120, 30, 5, fill=True, stroke=False)
+        canvas_obj.setFillColor(colors.black)
+        canvas_obj.setFont("Helvetica-Bold", 10)
+        canvas_obj.drawCentredString(width - 90, height - 83, "By: CODE CRUSHERS")
+        
+        canvas_obj.restoreState()
+    
     @staticmethod
     def generate_letter(loan_application, age_segment=None):
-        """Generate sanction letter with segment info"""
+        """Generate professional sanction letter with segment info"""
         try:
-            from reportlab.pdfgen import canvas
-            from reportlab.lib.pagesizes import letter
-            from reportlab.lib.units import inch
-            import io
-            from django.core.files.base import ContentFile
-            from datetime import datetime
+            buffer = BytesIO()
             
-            buffer = io.BytesIO()
-            p = canvas.Canvas(buffer, pagesize=letter)
-            width, height = letter
+            # Create document with custom margins
+            doc = SimpleDocTemplate(
+                buffer,
+                pagesize=A4,
+                rightMargin=40,
+                leftMargin=40,
+                topMargin=130,
+                bottomMargin=50
+            )
             
-            # Header with background
-            p.setFillColorRGB(0.2, 0.3, 0.6)
-            p.rect(0, height - 100, width, 100, fill=1)
+            # Container for PDF elements
+            elements = []
             
-            # Title
-            p.setFillColorRGB(1, 1, 1)
-            p.setFont("Helvetica-Bold", 24)
-            p.drawCentredString(width/2, height - 60, "LOAN SANCTION LETTER")
+            # Styles
+            styles = getSampleStyleSheet()
             
-            # Company name
-            p.setFont("Helvetica", 12)
-            p.drawCentredString(width/2, height - 85, "Multi-Agent Loan Processing System")
+            # Custom styles
+            ref_style = ParagraphStyle(
+                'RefStyle',
+                parent=styles['Normal'],
+                fontSize=9,
+                textColor=colors.HexColor('#6b7280'),
+                alignment=TA_RIGHT,
+                spaceAfter=20
+            )
             
-            # Reset to black for content
-            p.setFillColorRGB(0, 0, 0)
+            date_style = ParagraphStyle(
+                'DateStyle',
+                parent=styles['Normal'],
+                fontSize=10,
+                textColor=colors.HexColor('#374151'),
+                spaceAfter=15
+            )
+            
+            address_style = ParagraphStyle(
+                'AddressStyle',
+                parent=styles['Normal'],
+                fontSize=10,
+                textColor=colors.HexColor('#374151'),
+                spaceAfter=5,
+                leading=14
+            )
+            
+            subject_style = ParagraphStyle(
+                'SubjectStyle',
+                parent=styles['Normal'],
+                fontSize=11,
+                textColor=colors.HexColor('#1e40af'),
+                fontName='Helvetica-Bold',
+                spaceAfter=15,
+                spaceBefore=10
+            )
+            
+            body_style = ParagraphStyle(
+                'BodyStyle',
+                parent=styles['Normal'],
+                fontSize=10,
+                textColor=colors.HexColor('#374151'),
+                spaceAfter=12,
+                leading=15,
+                alignment=TA_JUSTIFY
+            )
+            
+            # Reference number
+            ref_number = f"Ref No: KCPL/{datetime.now().year}/LA{loan_application.id:06d}"
+            elements.append(Paragraph(ref_number, ref_style))
             
             # Date
-            p.setFont("Helvetica", 10)
-            current_date = datetime.now().strftime("%B %d, %Y")
-            p.drawString(inch, height - 130, f"Date: {current_date}")
+            elements.append(Paragraph(
+                f"Date: {datetime.now().strftime('%B %d, %Y')}",
+                date_style
+            ))
             
-            # Customer details section
-            y = height - 180
-            p.setFont("Helvetica-Bold", 14)
-            p.drawString(inch, y, "Customer Details:")
+            # Applicant details
+            applicant_name = loan_application.customer.name
+            elements.append(Paragraph(f"<b>{applicant_name}</b>", address_style))
             
-            y -= 30
-            p.setFont("Helvetica", 11)
-            p.drawString(inch, y, f"Name: {loan_application.customer.name}")
-            y -= 20
-            p.drawString(inch, y, f"Application ID: LA-{loan_application.id:06d}")
-            y -= 20
-            p.drawString(inch, y, f"PAN: {loan_application.customer.pan}")
-            y -= 20
+            # Add address if available
+            if hasattr(loan_application.customer, 'address') and loan_application.customer.address:
+                elements.append(Paragraph(loan_application.customer.address, address_style))
+            else:
+                elements.append(Paragraph("123, Sector-10", address_style))
+                elements.append(Paragraph("New Delhi - 110016", address_style))
             
             # Add segment info if available
             if age_segment:
-                p.setFont("Helvetica", 10)
-                p.setFillColorRGB(0.2, 0.3, 0.6)
-                p.drawString(inch, y, f"Customer Profile: {age_segment['segment']} (Age: {age_segment['age_group']})")
-                y -= 20
+                segment_text = f"<i>Customer Profile: {age_segment['segment']} | Age Group: {age_segment['age_group']}</i>"
+                segment_style = ParagraphStyle(
+                    'SegmentStyle',
+                    parent=address_style,
+                    fontSize=9,
+                    textColor=colors.HexColor('#6b7280'),
+                    fontName='Helvetica-Oblique'
+                )
+                elements.append(Paragraph(segment_text, segment_style))
             
-            p.setFont("Helvetica-Bold", 10)
-            p.setFillColorRGB(0, 0.5, 0)
-            p.drawString(inch, y, "✓ KYC Verified with Document Authentication")
-            p.setFillColorRGB(0, 0, 0)
+            elements.append(Spacer(1, 0.2 * inch))
             
-            # Loan details section
-            y -= 40
-            p.setFont("Helvetica-Bold", 14)
-            p.drawString(inch, y, "Loan Details:")
+            # Subject
+            elements.append(Paragraph(
+                "<b>Subject: Sanction of Personal Loan</b>",
+                subject_style
+            ))
             
-            y -= 30
-            p.setFont("Helvetica", 11)
-            p.drawString(inch, y, f"Sanctioned Amount: ₹{loan_application.loan_amount:,.2f}")
-            y -= 20
-            p.drawString(inch, y, f"Tenure: {loan_application.tenure_months} months")
-            y -= 20
-            p.drawString(inch, y, f"Purpose: {loan_application.purpose}")
+            # Salutation
+            first_name = applicant_name.split()[0] if applicant_name else 'Customer'
+            elements.append(Paragraph(
+                f"Dear {first_name},",
+                body_style
+            ))
             
-            # EMI Calculation
-            monthly_emi = float(loan_application.loan_amount) / loan_application.tenure_months
-            y -= 20
-            p.drawString(inch, y, f"Estimated Monthly EMI: ₹{monthly_emi:,.2f}")
+            # Body text
+            elements.append(Paragraph(
+                f"We are pleased to inform you that your application for a Personal Loan with TATA CAPITAL Financial Services Limited "
+                f"has been approved. We thank you for choosing TATA CAPITAL as your financial partner.",
+                body_style
+            ))
             
-            # Approval message
-            y -= 50
-            p.setFont("Helvetica-Bold", 13)
-            p.setFillColorRGB(0, 0.5, 0)
-            p.drawString(inch, y, "✓ LOAN APPROVED")
+            # Add KYC verified note
+            kyc_style = ParagraphStyle(
+                'KYCStyle',
+                parent=body_style,
+                textColor=colors.HexColor('#10b981'),
+                fontName='Helvetica-Bold'
+            )
+            elements.append(Paragraph(
+                "✓ KYC Verified with AI-Powered Document Authentication",
+                kyc_style
+            ))
+            elements.append(Spacer(1, 0.15 * inch))
             
-            # Terms and conditions
-            y -= 40
-            p.setFillColorRGB(0, 0, 0)
-            p.setFont("Helvetica-Bold", 12)
-            p.drawString(inch, y, "Terms & Conditions:")
+            # Calculate values
+            loan_amount = float(loan_application.loan_amount)
+            tenure_months = loan_application.tenure_months
             
-            y -= 25
-            p.setFont("Helvetica", 9)
-            terms = [
-                "1. This sanction letter is valid for 30 days from the date of issue.",
-                "2. Interest rate will be communicated separately as per prevailing rates.",
-                "3. Processing fee and other charges apply as per bank policy.",
-                "4. Complete documentation must be submitted within 15 days.",
-                "5. The bank reserves the right to cancel this sanction at any time.",
-                "6. All documents have been verified using secure AI-powered verification.",
-                "7. Loan terms customized based on customer profile and creditworthiness."
+            # Get interest rate from loan_application or use default
+            if hasattr(loan_application, 'interest_rate') and loan_application.interest_rate:
+                interest_rate = float(loan_application.interest_rate)
+            else:
+                interest_rate = 10.99
+            
+            # Calculate EMI
+            monthly_rate = interest_rate / 12 / 100
+            if monthly_rate > 0:
+                emi = loan_amount * monthly_rate * ((1 + monthly_rate) ** tenure_months) / (((1 + monthly_rate) ** tenure_months) - 1)
+            else:
+                emi = loan_amount / tenure_months
+            
+            processing_fee = loan_amount * 0.02  # 2% processing fee
+            disbursement_amount = loan_amount - processing_fee
+            
+            # Account number
+            account_number = f"KC{datetime.now().year}4PL{loan_application.id:06d}"
+            
+            # Loan details table (yellow box)
+            loan_data = [
+                ['Loan Type:', 'Personal Loan'],
+                ['Application ID:', f'LA-{loan_application.id:06d}'],
+                ['Account Number:', account_number],
+                ['PAN Number:', loan_application.customer.pan],
+                ['Sanctioned Amount:', f'Rs{loan_amount:,.0f}'],
+                ['Interest Rate:', f'{interest_rate}% p.a.'],
+                ['Loan Tenure:', f'{tenure_months} months'],
+                ['Purpose:', loan_application.purpose],
+                ['Monthly EMI:', f'Rs{emi:,.0f}'],
+                ['Processing Fee:', f'Rs{processing_fee:,.0f} + GST'],
+                ['Disbursement Amount:', f'Rs{disbursement_amount:,.0f}'],
             ]
             
+            # Create table with yellow background
+            table = Table(loan_data, colWidths=[2.2 * inch, 3.5 * inch])
+            table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#fffbeb')),
+                ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#78716c')),
+                ('TEXTCOLOR', (1, 0), (1, -1), colors.HexColor('#1f2937')),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (0, -1), 'Helvetica'),
+                ('FONTNAME', (1, 0), (1, -1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 10),
+                ('LEFTPADDING', (0, 0), (-1, -1), 15),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 15),
+                ('TOPPADDING', (0, 0), (-1, -1), 8),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('BOX', (0, 0), (-1, -1), 1, colors.HexColor('#fbbf24')),
+            ]))
+            
+            elements.append(table)
+            elements.append(Spacer(1, 0.15 * inch))
+            
+            # Disbursement note
+            elements.append(Paragraph(
+                "The loan amount will be disbursed to your registered bank account within 2-3 business days upon completion of documentation.",
+                body_style
+            ))
+            elements.append(Spacer(1, 0.25 * inch))
+            
+            # Terms and Conditions
+            elements.append(Paragraph("<b>Terms and Conditions:</b>", subject_style))
+            
+            terms_style = ParagraphStyle(
+                'TermsStyle',
+                parent=styles['Normal'],
+                fontSize=9,
+                textColor=colors.HexColor('#4b5563'),
+                leftIndent=10,
+                spaceAfter=4,
+                leading=13
+            )
+            
+            terms = [
+                "• First EMI due on the 5th of next month following disbursement.",
+                "• EMI payments through NACH/ECS/Standing instructions.",
+                "• Prepayment charges: 4% + GST on principal after 12 months, NIL thereafter.",
+                "• Late payment: Rs500 per instance + 2% per month on overdue.",
+                "• Subject to terms in the Loan Agreement.",
+                "• Ensure sufficient balance for timely EMI deduction.",
+                "• This sanction is valid for 30 days from letter date.",
+                "• All documents verified using secure AI-powered verification system.",
+            ]
+            
+            # Add segment-specific terms if available
+            if age_segment:
+                terms.append(f"• Loan terms customized for {age_segment['segment']} profile.")
+            
             for term in terms:
-                p.drawString(inch, y, term)
-                y -= 15
+                elements.append(Paragraph(term, terms_style))
             
-            # Footer
-            y = inch
-            p.drawCentredString(width/2, y, "This is a system generated document. No signature required.")
-            p.drawCentredString(width/2, y - 12, "For queries, contact: support@loanprocessing.com | Phone: 1800-XXX-XXXX")
+            elements.append(Spacer(1, 0.15 * inch))
             
-            # Draw a border
-            p.setStrokeColorRGB(0.2, 0.3, 0.6)
-            p.setLineWidth(2)
-            p.rect(0.5*inch, 0.5*inch, width - inch, height - inch, fill=0)
+            # Visit branch note
+            elements.append(Paragraph(
+                "Please visit your nearest TATA CAPITAL branch or contact our customer service team to complete the "
+                "documentation process. Carry original documents for verification along with this sanction letter.",
+                body_style
+            ))
+            elements.append(Spacer(1, 0.1 * inch))
             
-            p.showPage()
-            p.save()
+            # Contact info
+            contact_style = ParagraphStyle(
+                'ContactStyle',
+                parent=styles['Normal'],
+                fontSize=9,
+                textColor=colors.HexColor('#374151'),
+                spaceAfter=8
+            )
+            
+            elements.append(Paragraph(
+                "For queries, contact our customer care at <b>1800-209-7700</b> or email <b>care@TATA_CAPITAL.com</b>",
+                contact_style
+            ))
+            
+            elements.append(Paragraph(
+                "We look forward to serving you and wish you all the best for your financial goals.",
+                body_style
+            ))
+            elements.append(Spacer(1, 0.3 * inch))
+            
+            # Signature section
+            sig_data = [
+                ['', ''],
+                ['Authorized Signatory', '<b>APPROVED</b>'],
+                ['TATA_CAPITAL Financial Services Ltd.', '']
+            ]
+            
+            sig_table = Table(sig_data, colWidths=[3 * inch, 2.5 * inch])
+            sig_table.setStyle(TableStyle([
+                ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+                ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+                ('FONTNAME', (0, 1), (0, 1), 'Helvetica-Bold'),
+                ('FONTNAME', (1, 1), (1, 1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 1), (0, 1), 10),
+                ('FONTSIZE', (1, 1), (1, 1), 16),
+                ('TEXTCOLOR', (1, 1), (1, 1), colors.HexColor('#1e40af')),
+                ('FONTSIZE', (0, 2), (0, 2), 8),
+                ('TEXTCOLOR', (0, 2), (0, 2), colors.HexColor('#6b7280')),
+                ('LINEABOVE', (0, 1), (0, 1), 1, colors.HexColor('#d1d5db')),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ]))
+            
+            elements.append(sig_table)
+            elements.append(Spacer(1, 0.3 * inch))
+            
+            # Footer information
+            footer_style = ParagraphStyle(
+                'FooterStyle',
+                parent=styles['Normal'],
+                fontSize=8,
+                textColor=colors.HexColor('#6b7280'),
+                spaceAfter=3,
+                leading=11
+            )
+            
+            elements.append(Paragraph("<b>Corporate Office</b>", footer_style))
+            elements.append(Paragraph(
+                "7th Floor, Tower A, Peninsula Business Park<br/>"
+                "Ganpatrao Kadam Marg, Lower Parel<br/>"
+                "Mumbai - 400013, Maharashtra",
+                footer_style
+            ))
+            elements.append(Spacer(1, 0.1 * inch))
+            
+            elements.append(Paragraph("<b>Contact Information</b>", footer_style))
+            elements.append(Paragraph(
+                "Phone: 1800-209-7700<br/>"
+                "Email: care@TATA_CAPITAL.com<br/>"
+                "Website: www.TATA_CAPITALcapital.com",
+                footer_style
+            ))
+            elements.append(Spacer(1, 0.1 * inch))
+            
+            elements.append(Paragraph("<b>Legal</b>", footer_style))
+            elements.append(Paragraph(
+                f"CIN: U65929MH1995PLC086970<br/>"
+                f"RBI Registered NBFC<br/>"
+                f"Built during Technathon 6.0",
+                footer_style
+            ))
+            
+            # Build PDF with header/footer
+            doc.build(
+                elements, 
+                onFirstPage=SanctionLetterGenerator.draw_header_footer, 
+                onLaterPages=SanctionLetterGenerator.draw_header_footer
+            )
             
             buffer.seek(0)
-            return ContentFile(buffer.read(), name=f'sanction_letter_{loan_application.id}.pdf')
+            return ContentFile(
+                buffer.read(), 
+                name=f'sanction_letter_LA{loan_application.id:06d}.pdf'
+            )
         
         except Exception as e:
             print(f"Error generating sanction letter: {str(e)}")
-            raise(e)
-        except:
-            return {"name": "NOT_FOUND", "date_of_birth": "NOT_FOUND"}
+            raise e
 
 
 class FaceMatchAgent(BaseAgent):
@@ -1127,11 +1384,11 @@ IMPORTANT:
         
         summary = f"""Thank you for sharing all the details! Let me summarize:
 
-- Loan Amount: ₹{details['loan_amount']:,}
+- Loan Amount: Rs{details['loan_amount']:,}
 - Purpose: {details['purpose']}
 - Tenure: {details['tenure_months']} months
 - Employment: {details['employment_type']}
-- Monthly Income: ₹{details['monthly_income']:,}
+- Monthly Income: Rs{details['monthly_income']:,}
 
 I'll now process this information and check your eligibility. Our Credit Risk Agent will review your application shortly."""
         
