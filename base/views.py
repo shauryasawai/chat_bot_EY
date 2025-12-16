@@ -91,11 +91,20 @@ def upload_selfie(request):
             'message': 'Invalid session. Please refresh and try again.'
         }, status=404)
     
-    # Check if customer and PAN card exist
-    if not session.customer or not session.customer.pan_card_image:
+    # Check if customer exists and PAN is verified
+    if not session.customer or not session.customer.pan_verified:
         return JsonResponse({
             'success': False,
             'message': 'PAN card verification not completed. Please complete previous steps.'
+        }, status=400)
+    
+    # ✅ Check if we have temporary PAN image data for face matching
+    if not session.temp_pan_image_data:
+        return JsonResponse({
+            'success': False,
+            'message': 'PAN card image data not found. Please upload your PAN card again.',
+            'requires_pan_reupload': True,
+            'workflow_stage': 'pan_verification'
         }, status=400)
     
     try:
@@ -107,13 +116,15 @@ def upload_selfie(request):
         # Initialize face match agent
         face_agent = FaceMatchAgent()
         
-        # Open PAN card image
-        pan_card_file = customer.pan_card_image.open('rb')
+        # Read selfie image data directly from memory
+        selfie_image.seek(0)
+        selfie_data = selfie_image.read()
         
-        # Perform face matching
-        match_result = face_agent.match_faces(selfie_image, pan_card_file)
+        # ✅ Decode PAN card image from base64
+        pan_card_data = base64.b64decode(session.temp_pan_image_data)
         
-        pan_card_file.close()
+        # Perform face matching using raw bytes
+        match_result = face_agent.match_faces(selfie_data, pan_card_data)
         
         # Generate human-readable report
         match_message = face_agent.generate_match_report(match_result)
@@ -124,16 +135,18 @@ def upload_selfie(request):
         
         if faces_match and confidence >= 20:
             # Face match successful
-            # Save selfie image
-            file_path = f'selfies/{customer.id}_{selfie_image.name}'
-            saved_path = default_storage.save(file_path, selfie_image)
-            customer.selfie_image = saved_path
+            # ✅ NO FILE STORAGE - Just save verification metadata
+            customer.selfie_verified = True
             customer.face_match_verified = True
             customer.face_match_confidence = confidence
             customer.save()
             
+            # ✅ Clear temporary PAN image data (no longer needed)
+            session.temp_pan_image_data = None
+            
             # Update session to loan details stage
             session.stage = 'loan_details'
+            session.save()
             
             # Add match message to conversation
             conversation = add_message(session, 'assistant', match_message, 'verification')
@@ -143,7 +156,6 @@ def upload_selfie(request):
             loan_message = sales_agent.engage_customer(session, conversation, age_segment)
             
             add_message(session, 'assistant', loan_message, 'sales')
-            session.save()
             
             return JsonResponse({
                 'success': True,
@@ -161,7 +173,7 @@ def upload_selfie(request):
             })
             
         else:
-            # Face match failed
+            # Face match failed - keep temp PAN data for retry
             reason = match_result.get('verification_notes', 'Faces do not match sufficiently')
             
             return JsonResponse({
@@ -177,6 +189,10 @@ def upload_selfie(request):
             })
             
     except Exception as e:
+        # On error, clear temp data
+        session.temp_pan_image_data = None
+        session.save()
+        
         return JsonResponse({
             'success': False,
             'message': f'Face verification error: {str(e)}',
@@ -516,6 +532,8 @@ def chat(request):
     return JsonResponse(response_data)
 
 
+import base64
+
 @csrf_exempt
 @require_http_methods(["POST"])
 def upload_pan_card(request):
@@ -571,9 +589,17 @@ def upload_pan_card(request):
         # Initialize PAN verification agent
         pan_agent = PANVerificationAgent()
         
+        # Read image data directly (no file storage needed)
+        pan_image.seek(0)
+        pan_image_data = pan_image.read()
+        
+        # ✅ Store PAN image as base64 in session for later face matching
+        pan_base64 = base64.b64encode(pan_image_data).decode('utf-8')
+        session.temp_pan_image_data = pan_base64
+        
         # Verify PAN card using AI
         verification_result = pan_agent.verify_pan_card(
-            pan_image, 
+            pan_image_data,  # Pass bytes directly
             expected_name,
             expected_pan
         )
@@ -667,15 +693,13 @@ def upload_pan_card(request):
                 )
                 is_existing = False
             
-            # Save PAN card image
-            file_path = f'pan_cards/{customer.id}_{pan_image.name}'
-            saved_path = default_storage.save(file_path, pan_image)
-            customer.pan_card_image = saved_path
+            # ✅ NO FILE STORAGE - Just save verification metadata
             customer.save()
             
             # Update session
             session.customer = customer
             session.stage = 'selfie_verification'
+            session.save()  # Save session with temp_pan_image_data
             
             # Get age segment now that we have customer with DOB
             age_segment = get_age_segment(session)
@@ -711,7 +735,6 @@ def upload_pan_card(request):
                 )
             
             add_message(session, 'assistant', selfie_message, 'verification')
-            session.save()
             
             return JsonResponse({
                 'success': True,
@@ -732,9 +755,11 @@ def upload_pan_card(request):
             })
             
         else:
-            # Verification failed
-            reasons = []
+            # Verification failed - clear temp data
+            session.temp_pan_image_data = None
+            session.save()
             
+            reasons = []
             if not verification_result.get('is_valid_pan_card'):
                 reasons.append(
                     verification_result.get('verification_notes', 'Invalid PAN card detected')
@@ -750,6 +775,10 @@ def upload_pan_card(request):
             })
             
     except Exception as e:
+        # Clear temp data on error
+        session.temp_pan_image_data = None
+        session.save()
+        
         return JsonResponse({
             'success': False,
             'message': f'Verification error: {str(e)}',
@@ -811,10 +840,18 @@ def upload_salary_slip(request):
                 'message': 'No loan application found'
             }, status=400)
         
-        # Save salary slip to loan application
-        file_path = f'salary_slips/{loan_app.id}_{salary_slip.name}'
-        saved_path = default_storage.save(file_path, salary_slip)
-        loan_app.salary_slip = saved_path
+        # Convert salary slip to base64 and store in memory
+        salary_slip.seek(0)  # Reset file pointer to beginning
+        salary_slip_content = salary_slip.read()
+        salary_slip_base64 = base64.b64encode(salary_slip_content).decode('utf-8')
+        
+        # Store in memory with metadata
+        loan_app.salary_slip_data = {
+            'filename': salary_slip.name,
+            'content_type': salary_slip.content_type,
+            'size': salary_slip.size,
+            'data': salary_slip_base64
+        }
         
         # TODO: Add AI-powered salary slip verification here
         # For now, assume verification passes and approve loan
@@ -825,13 +862,21 @@ def upload_salary_slip(request):
         # Generate sanction letter with segment info
         try:
             sanction_letter = SanctionLetterGenerator.generate_letter(loan_app, age_segment)
-            loan_app.sanction_letter.save(
-                f'sanction_{loan_app.id}.pdf',
-                sanction_letter,
-                save=True
-            )
             
-            sanction_letter_url = loan_app.sanction_letter.url
+            # Store sanction letter in memory as base64
+            sanction_letter.seek(0)
+            sanction_letter_content = sanction_letter.read()
+            sanction_letter_base64 = base64.b64encode(sanction_letter_content).decode('utf-8')
+            
+            loan_app.sanction_letter_data = {
+                'filename': f'sanction_{loan_app.id}.pdf',
+                'content_type': 'application/pdf',
+                'data': sanction_letter_base64
+            }
+            loan_app.save()
+            
+            # Create a data URL for frontend access
+            sanction_letter_url = f'data:application/pdf;base64,{sanction_letter_base64}'
             
             # Age-aware approval message
             if age_segment:

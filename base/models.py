@@ -105,8 +105,13 @@ class ChatSession(models.Model):
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE, null=True, blank=True)
     customer_name = models.CharField(max_length=200, null=True, blank=True)
     
-    # NEW: Temporary storage for DOB before customer is created
     temp_dob = models.CharField(max_length=20, null=True, blank=True)
+    
+    temp_pan_image_data = models.TextField(
+        null=True, 
+        blank=True,
+        help_text="Temporary base64 encoded PAN image for face matching - cleared after verification"
+    )
     
     stage = models.CharField(max_length=50, choices=STAGE_CHOICES, default='greeting')
     conversation_data = models.TextField(default='[]')  # JSON stored as text
@@ -121,6 +126,11 @@ class ChatSession(models.Model):
             return json.loads(self.conversation_data)
         except:
             return []
+    
+    def clear_temp_data(self):
+        """Clear temporary data after verification is complete"""
+        self.temp_pan_image_data = None
+        self.save()
     
     def __str__(self):
         return f"Session {self.id} - {self.stage}"
@@ -161,6 +171,9 @@ class LoanApplication(models.Model):
     # Documents
     salary_slip = models.FileField(upload_to='salary_slips/', null=True, blank=True)
     sanction_letter = models.FileField(upload_to='sanction_letters/', null=True, blank=True)
+
+    salary_slip_data = models.JSONField(null=True, blank=True)
+    sanction_letter_data = models.JSONField(null=True, blank=True)
     
     # NEW: Additional documents for self-employed
     itr_document = models.FileField(upload_to='itr_documents/', null=True, blank=True)
