@@ -891,7 +891,25 @@ def upload_salary_slip(request):
             'message': f'Upload failed: {str(e)}'
         }, status=500)
 
+# Add to your views.py
+@csrf_exempt
+def set_language(request):
+    data = json.loads(request.body)
+    session_id = data.get('session_id')
+    language = data.get('language', 'en')
+    
+    # Store language in session
+    session = ChatSession.objects.get(id=session_id)
+    session.language = language
+    session.save()
+    
+    # Update all agents
+    for agent in [MasterAgent, VerificationAgent, SalesAgent]:
+        agent.set_language(language)
+    
+    return JsonResponse({'success': True})
 
+@csrf_exempt
 def download_sanction_letter(request, loan_id):
     """Download sanction letter PDF"""
     try:

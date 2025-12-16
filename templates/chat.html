@@ -7,6 +7,7 @@
   <style>
     @import url("https://fonts.googleapis.com/css2?family=EYInterstate:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap");
     @import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap");
+    @import url("https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@300;400;500;600;700;800&display=swap");
 
     :root {
       --ey-yellow: #FFE600;
@@ -64,6 +65,10 @@
       padding: 20px;
       position: relative;
       overflow: hidden;
+    }
+
+    body.hindi {
+      font-family: "Noto Sans Devanagari", "Inter", sans-serif;
     }
 
     body::before {
@@ -160,6 +165,40 @@
       display: flex;
       align-items: center;
       gap: 16px;
+    }
+
+    /* Language Selector */
+    .language-selector {
+      background: white;
+      border: 2px solid var(--border-light);
+      border-radius: 8px;
+      padding: 6px;
+      display: flex;
+      gap: 4px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .lang-btn {
+      padding: 8px 16px;
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      border-radius: 6px;
+      transition: all 0.2s;
+      letter-spacing: 0.3px;
+    }
+
+    .lang-btn:hover {
+      background: var(--bg-secondary);
+    }
+
+    .lang-btn.active {
+      background: linear-gradient(135deg, var(--tata-blue) 0%, var(--tata-blue-light) 100%);
+      color: white;
+      box-shadow: var(--shadow-brand);
     }
 
     .event-badge {
@@ -753,6 +792,11 @@
         width: 100%;
         justify-content: space-between;
       }
+      .language-selector {
+        order: -1;
+        width: 100%;
+        justify-content: center;
+      }
       .event-badge {
         padding: 6px 12px;
       }
@@ -779,10 +823,14 @@
         <div class="brand-logo">TC</div>
         <div class="brand-info">
           <div class="brand-title">TATA CAPITAL</div>
-          <div class="brand-subtitle">AI-Powered Loan Assistant</div>
+          <div class="brand-subtitle" data-translate="subtitle">AI-Powered Loan Assistant</div>
         </div>
       </div>
       <div class="header-right">
+        <div class="language-selector">
+          <button class="lang-btn active" data-lang="en" onclick="changeLanguage('en')">English</button>
+          <button class="lang-btn" data-lang="hi" onclick="changeLanguage('hi')">हिन्दी</button>
+        </div>
         <div class="event-badge">
           <div class="event-title">Built During</div>
           <div class="event-name">EY TECHATHON 2025</div>
@@ -790,7 +838,7 @@
         <div class="team-badge">⚡ CODE CRUSHERS</div>
         <div class="header-status">
           <div class="status-dot"></div>
-          SECURE
+          <span data-translate="secure">SECURE</span>
         </div>
       </div>
     </header>
@@ -810,8 +858,8 @@
 
         <div class="drop-zone" id="dropZone">
           <span class="drop-icon" id="uploadIcon">📄</span>
-          <div class="drop-text" id="uploadText">Drag & drop your file here</div>
-          <div class="drop-subtext">or click to browse</div>
+          <div class="drop-text" id="uploadText" data-translate="drop-text">Drag & drop your file here</div>
+          <div class="drop-subtext" data-translate="drop-subtext">or click to browse</div>
           <input type="file" id="fileInput" accept="image/*" hidden />
         </div>
 
@@ -837,6 +885,7 @@
           class="text-input"
           id="messageInput"
           placeholder="Type your message..."
+          data-translate-placeholder="input-placeholder"
           autocomplete="off"
         />
         <button class="send-btn" id="sendBtn" disabled>
@@ -853,13 +902,101 @@
     let currentUploadType = null;
     let selectedFile = null;
     let stream = null;
+    let currentLanguage = 'en';
+
+    // Translation dictionary
+    const translations = {
+      en: {
+        subtitle: "AI-Powered Loan Assistant",
+        secure: "SECURE",
+        "drop-text": "Drag & drop your file here",
+        "drop-subtext": "or click to browse",
+        "input-placeholder": "Type your message...",
+        "select-file": "Select File",
+        "use-camera": "Use Camera",
+        "upload-file": "Upload File",
+        "capture-photo": "Capture Photo",
+        "verify-submit": "Verify & Submit",
+        "retake": "Retake",
+        "verifying": "Verifying...",
+        "upload-pan": "Upload PAN Card",
+        "upload-selfie": "Take Live Selfie",
+        "upload-salary": "Upload Salary Slip",
+        "camera-text": "Click to start camera"
+      },
+      hi: {
+        subtitle: "एआई-संचालित ऋण सहायक",
+        secure: "सुरक्षित",
+        "drop-text": "अपनी फ़ाइल यहाँ खींचें और छोड़ें",
+        "drop-subtext": "या ब्राउज़ करने के लिए क्लिक करें",
+        "input-placeholder": "अपना संदेश टाइप करें...",
+        "select-file": "फ़ाइल चुनें",
+        "use-camera": "कैमरा उपयोग करें",
+        "upload-file": "फ़ाइल अपलोड करें",
+        "capture-photo": "फोटो लें",
+        "verify-submit": "सत्यापित करें और सबमिट करें",
+        "retake": "पुनः लें",
+        "verifying": "सत्यापन हो रहा है...",
+        "upload-pan": "PAN कार्ड अपलोड करें",
+        "upload-selfie": "लाइव सेल्फी लें",
+        "upload-salary": "वेतन पर्ची अपलोड करें",
+        "camera-text": "कैमरा शुरू करने के लिए क्लिक करें"
+      }
+    };
+
+    function changeLanguage(lang) {
+      currentLanguage = lang;
+      
+      // Update active button
+      document.querySelectorAll('.lang-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.lang === lang);
+      });
+
+      // Update body class for font
+      document.body.classList.toggle('hindi', lang === 'hi');
+
+      // Translate static elements
+      document.querySelectorAll('[data-translate]').forEach(el => {
+        const key = el.dataset.translate;
+        if (translations[lang][key]) {
+          el.textContent = translations[lang][key];
+        }
+      });
+
+      // Translate placeholders
+      document.querySelectorAll('[data-translate-placeholder]').forEach(el => {
+        const key = el.dataset.translatePlaceholder;
+        if (translations[lang][key]) {
+          el.placeholder = translations[lang][key];
+        }
+      });
+
+      // Reinitialize chat with new language if session exists
+      if (sessionId) {
+        fetch('/set_language/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: sessionId, language: lang })
+        }).then(() => {
+          // Add system message about language change
+          const msg = lang === 'hi' 
+            ? 'भाषा हिन्दी में बदल गई। मैं अब हिन्दी में उत्तर दूंगा।'
+            : 'Language changed to English. I will now respond in English.';
+          addMessage(msg, 'agent');
+        });
+      }
+    }
 
     window.addEventListener("load", initChat);
 
     async function initChat() {
       showTyping();
       try {
-        const response = await fetch('/start_chat/', { method: 'POST' });
+        const response = await fetch('/start_chat/', { 
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ language: currentLanguage })
+        });
         const data = await response.json();
         hideTyping();
         if (data.session_id) {
@@ -869,7 +1006,10 @@
         }
       } catch (error) {
         hideTyping();
-        addMessage('Failed to connect. Please refresh.', 'agent');
+        const errorMsg = currentLanguage === 'hi' 
+          ? 'कनेक्ट करने में विफल। कृपया रीफ्रेश करें।'
+          : 'Failed to connect. Please refresh.';
+        addMessage(errorMsg, 'agent');
       }
     }
 
@@ -881,7 +1021,10 @@
     });
 
     msgInput.addEventListener("input", (e) => {
-      e.target.value = e.target.value.toUpperCase();
+      // Don't uppercase for Hindi
+      if (currentLanguage !== 'hi') {
+        e.target.value = e.target.value.toUpperCase();
+      }
       sendBtn.disabled = e.target.value.trim() === "";
     });
 
@@ -903,7 +1046,11 @@
         const response = await fetch('/chat/', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ session_id: sessionId, message: message })
+          body: JSON.stringify({ 
+            session_id: sessionId, 
+            message: message,
+            language: currentLanguage 
+          })
         });
         const data = await response.json();
         hideTyping();
@@ -914,7 +1061,10 @@
         if (data.sanction_letter_url) showApproval(data.sanction_letter_url);
       } catch (error) {
         hideTyping();
-        addMessage('Error processing request.', 'agent');
+        const errorMsg = currentLanguage === 'hi'
+          ? 'अनुरोध संसाधित करने में त्रुटि।'
+          : 'Error processing request.';
+        addMessage(errorMsg, 'agent');
       }
     }
 
@@ -983,9 +1133,18 @@
       const icon = document.getElementById("uploadIcon");
 
       const config = {
-        'pan_card': { label: 'Upload PAN Card', icon: '🆔' },
-        'selfie': { label: 'Take Live Selfie', icon: '🤳' },
-        'salary_slip': { label: 'Upload Salary Slip', icon: '📄' }
+        'pan_card': { 
+          label: translations[currentLanguage]['upload-pan'],
+          icon: '🆔' 
+        },
+        'selfie': { 
+          label: translations[currentLanguage]['upload-selfie'],
+          icon: '🤳' 
+        },
+        'salary_slip': { 
+          label: translations[currentLanguage]['upload-salary'],
+          icon: '📄' 
+        }
       };
 
       const settings = config[type] || config['pan_card'];
@@ -993,10 +1152,10 @@
       icon.textContent = settings.icon;
 
       if (type === 'selfie') {
-        document.getElementById("uploadText").textContent = "Click to start camera";
+        document.getElementById("uploadText").textContent = translations[currentLanguage]['camera-text'];
         renderButtons("start_camera");
       } else {
-        document.getElementById("uploadText").textContent = "Drag & drop your file here";
+        document.getElementById("uploadText").textContent = translations[currentLanguage]['drop-text'];
         renderButtons("default");
       }
 
@@ -1036,19 +1195,19 @@
       actionButtons.innerHTML = "";
 
       if (state === "default") {
-        const btn = createBtn("Select File", "secondary", () => fileInput.click());
+        const btn = createBtn(translations[currentLanguage]['select-file'], "secondary", () => fileInput.click());
         actionButtons.appendChild(btn);
       } else if (state === "start_camera") {
-        const camBtn = createBtn("Use Camera", "primary", startCamera);
-        const upBtn = createBtn("Upload File", "secondary", () => fileInput.click());
+        const camBtn = createBtn(translations[currentLanguage]['use-camera'], "primary", startCamera);
+        const upBtn = createBtn(translations[currentLanguage]['upload-file'], "secondary", () => fileInput.click());
         actionButtons.appendChild(camBtn);
         actionButtons.appendChild(upBtn);
       } else if (state === "capture") {
-        const capBtn = createBtn("Capture Photo", "primary", capturePhoto);
+        const capBtn = createBtn(translations[currentLanguage]['capture-photo'], "primary", capturePhoto);
         actionButtons.appendChild(capBtn);
       } else if (state === "upload") {
-        const confirmBtn = createBtn("Verify & Submit", "primary", uploadDocument);
-        const retakeBtn = createBtn("Retake", "secondary", () => {
+        const confirmBtn = createBtn(translations[currentLanguage]['verify-submit'], "primary", uploadDocument);
+        const retakeBtn = createBtn(translations[currentLanguage]['retake'], "secondary", () => {
           resetUI();
           renderButtons(currentUploadType === "selfie" ? "start_camera" : "default");
         });
@@ -1075,7 +1234,10 @@
         video.srcObject = stream;
         renderButtons("capture");
       } catch (e) {
-        alert("Camera not available.");
+        const alertMsg = currentLanguage === 'hi'
+          ? 'कैमरा उपलब्ध नहीं है।'
+          : 'Camera not available.';
+        alert(alertMsg);
         resetUI();
         renderButtons("default");
       }
@@ -1108,13 +1270,14 @@
       const btn = document.querySelector(".btn-primary");
       const originalText = btn.textContent;
       btn.disabled = true;
-      btn.innerHTML = '<span style="animation:spin 1s infinite linear;display:inline-block">↻</span> Verifying...';
+      btn.innerHTML = `<span style="animation:spin 1s infinite linear;display:inline-block">↻</span> ${translations[currentLanguage]['verifying']}`;
 
       const previewWrapper = document.getElementById("previewContainer");
       previewWrapper.classList.add("scanning");
 
       const formData = new FormData();
       formData.append('session_id', sessionId);
+      formData.append('language', currentLanguage);
 
       let endpoint = '/upload_pan_card/';
       if (currentUploadType === 'selfie') {
@@ -1140,14 +1303,16 @@
               if (data.sanction_letter_url) showApproval(data.sanction_letter_url);
             }, 2000);
           } else {
-            showStatus("error", data.message || "Verification Failed");
+            const errorMsg = data.message || (currentLanguage === 'hi' ? 'सत्यापन विफल' : 'Verification Failed');
+            showStatus("error", errorMsg);
             btn.textContent = originalText;
             btn.disabled = false;
           }
         })
         .catch(error => {
           previewWrapper.classList.remove("scanning");
-          showStatus("error", "Upload failed.");
+          const errorMsg = currentLanguage === 'hi' ? 'अपलोड विफल।' : 'Upload failed.';
+          showStatus("error", errorMsg);
           btn.textContent = originalText;
           btn.disabled = false;
         });
@@ -1169,10 +1334,19 @@
     function showApproval(url) {
       const div = document.createElement("div");
       div.className = "approval-card";
+      
+      const title = currentLanguage === 'hi' ? '🎉 ऋण स्वीकृत' : '🎉 Loan Approved';
+      const message = currentLanguage === 'hi' 
+        ? 'बधाई हो! आपका आवेदन स्वीकृत कर दिया गया है।'
+        : 'Congratulations! Your application has been sanctioned.';
+      const downloadText = currentLanguage === 'hi' 
+        ? '📥 स्वीकृति पत्र डाउनलोड करें'
+        : '📥 Download Sanction Letter';
+      
       div.innerHTML = `
-        <h3>🎉 Loan Approved</h3>
-        <p>Congratulations! Your application has been sanctioned.</p>
-        <a href="${url}" class="download-link" download>📥 Download Sanction Letter</a>
+        <h3>${title}</h3>
+        <p>${message}</p>
+        <a href="${url}" class="download-link" download>${downloadText}</a>
       `;
       const container = document.getElementById("messagesContainer");
       container.insertBefore(div, document.getElementById("typingIndicator"));

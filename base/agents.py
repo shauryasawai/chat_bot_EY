@@ -8,6 +8,61 @@ from datetime import datetime
 
 client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
+from openai import OpenAI
+import json
+from django.conf import settings
+from decimal import Decimal
+import re
+import base64
+from datetime import datetime
+
+client = OpenAI(api_key=settings.OPENAI_API_KEY)
+
+# Language translations dictionary
+TRANSLATIONS = {
+    'en': {
+        'greeting': "Hello! Welcome to Tata Capital's loan service. I'll help you with your loan application.",
+        'ask_name_dob': "To get started, could you please provide your full name and date of birth (DD/MM/YYYY or YYYY-MM-DD)?",
+        'dob_purpose': "Your date of birth helps us verify your age and provide personalized loan options.",
+        'found_record': "Great! I found your record in our system.",
+        'ask_pan': "For verification, please provide your PAN number (format: ABCDE1234F).",
+        'ask_pan_upload': "Thank you! Now please upload a clear photo or scan of your PAN card for KYC verification.",
+        'security_note': "This is for your security and identity verification.",
+        'new_customer': "You're a new customer. Welcome! We'll collect some details to process your application.",
+        'pan_mandatory': "PAN is mandatory for loan processing.",
+        'thank_you': "Thank you for your time! Have a great day.",
+        'kyc_request': "Please upload your Aadhar card image and provide your phone number.",
+        'data_security': "Your data security is our priority.",
+        'loan_questions': {
+            'amount': "What loan amount do you need?",
+            'purpose': "What is the purpose of this loan?",
+            'tenure': "What is your preferred loan tenure (in months)?",
+            'employment': "What is your employment type?",
+            'income': "What is your monthly income?"
+        }
+    },
+    'hi': {
+        'greeting': "नमस्ते! टाटा कैपिटल की ऋण सेवा में आपका स्वागत है। मैं आपके ऋण आवेदन में मदद करूंगा।",
+        'ask_name_dob': "शुरू करने के लिए, कृपया अपना पूरा नाम और जन्म तिथि (DD/MM/YYYY या YYYY-MM-DD) बताएं?",
+        'dob_purpose': "आपकी जन्म तिथि हमें आपकी उम्र सत्यापित करने और व्यक्तिगत ऋण विकल्प प्रदान करने में मदद करती है।",
+        'found_record': "बहुत बढ़िया! हमने आपका रिकॉर्ड हमारे सिस्टम में पाया।",
+        'ask_pan': "सत्यापन के लिए, कृपया अपना PAN नंबर प्रदान करें (प्रारूप: ABCDE1234F)।",
+        'ask_pan_upload': "धन्यवाद! अब कृपया KYC सत्यापन के लिए अपने PAN कार्ड की स्पष्ट फोटो या स्कैन अपलोड करें।",
+        'security_note': "यह आपकी सुरक्षा और पहचान सत्यापन के लिए है।",
+        'new_customer': "आप एक नए ग्राहक हैं। स्वागत है! हम आपके आवेदन को प्रोसेस करने के लिए कुछ विवरण एकत्र करेंगे।",
+        'pan_mandatory': "ऋण प्रोसेसिंग के लिए PAN अनिवार्य है।",
+        'thank_you': "आपके समय के लिए धन्यवाद! आपका दिन शुभ हो।",
+        'kyc_request': "कृपया अपने आधार कार्ड की छवि अपलोड करें और अपना फोन नंबर प्रदान करें।",
+        'data_security': "आपका डेटा सुरक्षा हमारी प्राथमिकता है।",
+        'loan_questions': {
+            'amount': "आपको कितनी ऋण राशि चाहिए?",
+            'purpose': "इस ऋण का उद्देश्य क्या है?",
+            'tenure': "आपकी पसंदीदा ऋण अवधि क्या है (महीनों में)?",
+            'employment': "आपका रोजगार प्रकार क्या है?",
+            'income': "आपकी मासिक आय क्या है?"
+        }
+    }
+}
 class CustomerSegmentation:
     """Helper class to determine customer segment based on age and profile"""
     
