@@ -951,84 +951,169 @@ class PANVerificationAgent(BaseAgent):
 class SalesAgent(BaseAgent):
     def __init__(self):
         super().__init__("Sales Agent", "Lead Qualification")
+        self.question_flow = [
+            "loan_amount",
+            "purpose",
+            "tenure",
+            "employment_details",
+            "income_details",
+            "additional_info"
+        ]
+    
+    def get_next_question_stage(self, conversation_history, extracted_details):
+        """Determine which question to ask next based on what's already collected"""
+        
+        # Check what information we already have
+        has_loan_amount = extracted_details.get('loan_amount') is not None
+        has_purpose = extracted_details.get('purpose') is not None
+        has_tenure = extracted_details.get('tenure_months') is not None
+        has_employment = extracted_details.get('employment_type') is not None
+        has_income = extracted_details.get('monthly_income') is not None
+        
+        # Return the next missing piece of information
+        if not has_loan_amount:
+            return "loan_amount"
+        elif not has_purpose:
+            return "purpose"
+        elif not has_tenure:
+            return "tenure"
+        elif not has_employment:
+            return "employment_details"
+        elif not has_income:
+            return "income_details"
+        else:
+            return "complete"
+    
+    def get_segment_specific_guidance(self, age_segment, question_stage):
+        """Get segment-specific guidance for current question"""
+        
+        if not age_segment:
+            return ""
+        
+        guidance = {
+            "loan_amount": {
+                "Young Salaried Professional": "Typically need ₹50K-₹3L for gadgets, travel, education",
+                "Mid-Career Salaried with Family": "Usually need ₹2L-₹10L for education, medical, home renovation",
+                "Self-Employed": "Often need ₹1L-₹15L for business or personal needs",
+                "Low-Income or New-to-Credit": "Generally need ₹20K-₹2L for essential needs",
+                "Existing Kite Capital Customer": "May qualify for higher amounts based on history"
+            },
+            "purpose": {
+                "Young Salaried Professional": "Common: gadgets, travel, courses, emergency",
+                "Mid-Career Salaried with Family": "Common: children's education, medical, wedding, debt consolidation",
+                "Self-Employed": "Common: working capital, expansion, equipment, personal emergency",
+                "Low-Income or New-to-Credit": "Common: education, vehicle, emergency, settling in new city",
+                "Existing Kite Capital Customer": "Quick verification for repeat/top-up loans"
+            },
+            "tenure": {
+                "Young Salaried Professional": "Prefer shorter tenures: 6-24 months",
+                "Mid-Career Salaried with Family": "Prefer longer tenures for lower EMI: 12-48 months",
+                "Self-Employed": "Flexible based on cash flow: 6-36 months",
+                "Low-Income or New-to-Credit": "Shorter tenures recommended: 6-18 months",
+                "Existing Kite Capital Customer": "Can leverage previous good payment history"
+            },
+            "employment_details": {
+                "Young Salaried Professional": "Ask about company type, designation, experience",
+                "Mid-Career Salaried with Family": "Ask about company stability, years of service",
+                "Self-Employed": "Ask about business type, vintage, GST registration",
+                "Low-Income or New-to-Credit": "Ask about job type (gig/entry-level), stability",
+                "Existing Kite Capital Customer": "Quick verification only"
+            },
+            "income_details": {
+                "Young Salaried Professional": "Monthly take-home salary",
+                "Mid-Career Salaried with Family": "Monthly income and existing EMI obligations",
+                "Self-Employed": "Monthly/Annual turnover, profit margins",
+                "Low-Income or New-to-Credit": "Monthly income, reassure about eligibility",
+                "Existing Kite Capital Customer": "Verify if income has changed"
+            }
+        }
+        
+        segment = age_segment.get('segment', '')
+        for key in guidance[question_stage].keys():
+            if key in segment:
+                return guidance[question_stage][key]
+        
+        return ""
     
     def engage_customer(self, session, conversation_history, age_segment=None):
-        """Engage customer with age-segment-aware questions"""
+        """Engage customer with one question at a time"""
         
-        # Build segment-specific context
+        # First, extract what we already know from conversation
+        current_details = self.extract_loan_details(conversation_history, age_segment)
+        
+        # Determine next question to ask
+        next_stage = self.get_next_question_stage(conversation_history, current_details)
+        
+        # If all information collected, acknowledge and move to next step
+        if next_stage == "complete":
+            return self._generate_completion_message(current_details, age_segment)
+        
+        # Build segment context
         segment_context = ""
-        questions_focus = []
-        
         if age_segment:
             segment_context = f"""
 Customer Profile:
 - Segment: {age_segment['segment']}
 - Age Group: {age_segment['age_group']}
 - Typical Needs: {', '.join(age_segment.get('needs', []))}
-- Behavior: {', '.join(age_segment.get('behaviour', []))}
 
-Tailor your questions based on this profile. """
-            
-            questions_focus = age_segment.get('questions_focus', [])
-            
-            # Add segment-specific question guidance
-            if 'Young Salaried Professional' in age_segment['segment']:
-                segment_context += """
-Ask about:
-- Employment details (company type, designation)
-- Monthly take-home salary
-- Loan purpose (gadgets, travel, education, emergency)
-- Preferred digital payment methods
-- Quick EMI affordability check"""
-            
-            elif 'Mid-Career Salaried with Family' in age_segment['segment']:
-                segment_context += """
-Ask about:
-- Family size and dependents
-- Monthly income and existing EMI obligations
-- Purpose (children's education, medical, home renovation, wedding, debt consolidation)
-- Home ownership status
-- Preferred loan tenure for budget planning"""
-            
-            elif 'Self-Employed' in age_segment['segment']:
-                segment_context += """
-Ask about:
-- Type of business/profession
-- Business vintage (years in operation)
-- Monthly/Annual turnover
-- Purpose (working capital, expansion, equipment, personal emergency)
-- GST registration and ITR filing status
-- Business documentation availability"""
-            
-            elif 'Low-Income or New-to-Credit' in age_segment['segment']:
-                segment_context += """
-Ask about:
-- Current employment (gig work, entry-level, first job)
-- Monthly income
-- Loan amount needed (keep it realistic for their profile)
-- Purpose (education, vehicle, emergency, settling in new city)
-- Any guarantor availability
-- Reassure them about the process"""
-            
-            elif 'Existing Kite Capital Customer' in age_segment['segment']:
-                segment_context += """
-Ask about:
-- Previous loan experience with us
-- Top-up requirement or new loan
-- Quick verification of pre-approved limit
-- Purpose (should be brief)
-- Preferred fast-track options"""
+Segment Guidance: {self.get_segment_specific_guidance(age_segment, next_stage)}
+"""
         
-        system_prompt = f"""You are a Sales Agent for personal loans.{segment_context}
+        # Build question-specific prompt
+        question_prompts = {
+            "loan_amount": f"""You are asking about the loan amount.{segment_context}
 
-Ask the customer about:
-1. Loan amount needed
-2. Purpose of the loan  
-3. Preferred tenure (in months)
-4. Any other relevant details based on their profile
+Ask the customer how much loan amount they need. Be conversational and natural.
+If they mention a range, help them narrow it down.
+Make them feel comfortable about the amount they're requesting.""",
+            
+            "purpose": f"""You are asking about the loan purpose.{segment_context}
 
-Be conversational, empathetic, and helpful. Extract information naturally.
-Make them feel comfortable and understood."""
+The customer needs a loan of ₹{current_details.get('loan_amount', 'X')}.
+Ask them what they need this loan for. Be empathetic and understanding.
+Show interest in their needs without being intrusive.""",
+            
+            "tenure": f"""You are asking about preferred loan tenure.{segment_context}
+
+The customer needs ₹{current_details.get('loan_amount', 'X')} for {current_details.get('purpose', 'their needs')}.
+Ask them how many months they'd like to repay over. 
+Suggest options based on their segment (e.g., 6, 12, 18, 24 months) and help them choose.""",
+            
+            "employment_details": f"""You are asking about employment details.{segment_context}
+
+Ask about their employment type and details:
+- If salaried: company type, designation
+- If self-employed: business type, years in operation
+- If gig worker: type of work, stability
+
+Be natural and conversational.""",
+            
+            "income_details": f"""You are asking about income details.{segment_context}
+
+Ask about their monthly income or earnings.
+- For salaried: monthly take-home salary
+- For self-employed: monthly/annual turnover
+- Also ask about any existing loan EMIs if relevant
+
+Be tactful and reassuring.""",
+            
+            "additional_info": f"""You are wrapping up information gathering.{segment_context}
+
+Ask if there's anything else they'd like to share that might help with the loan application.
+Examples: guarantor availability, documentation ready, urgency, etc.
+Keep it brief and optional."""
+        }
+        
+        system_prompt = question_prompts.get(next_stage, question_prompts["loan_amount"])
+        system_prompt += """
+
+IMPORTANT: 
+- Ask only ONE question at a time
+- Wait for their response before moving to the next question
+- Be conversational, warm, and empathetic
+- Acknowledge their previous answers naturally
+- Don't list multiple questions"""
         
         messages = [{"role": "system", "content": system_prompt}]
         
@@ -1036,6 +1121,21 @@ Make them feel comfortable and understood."""
             messages.append({"role": msg['role'], "content": msg['content']})
         
         return self.call_openai(messages)
+    
+    def _generate_completion_message(self, details, age_segment):
+        """Generate a message when all information is collected"""
+        
+        summary = f"""Thank you for sharing all the details! Let me summarize:
+
+- Loan Amount: ₹{details['loan_amount']:,}
+- Purpose: {details['purpose']}
+- Tenure: {details['tenure_months']} months
+- Employment: {details['employment_type']}
+- Monthly Income: ₹{details['monthly_income']:,}
+
+I'll now process this information and check your eligibility. Our Credit Risk Agent will review your application shortly."""
+        
+        return summary
     
     def extract_loan_details(self, conversation_history, age_segment=None):
         """Extract loan details with segment-aware parsing"""
@@ -1058,7 +1158,8 @@ Make them feel comfortable and understood."""
                 "segment_specific_data": {{}} (any additional relevant info)
             }}
             
-            If any information is missing, return null for that field."""}
+            If any information is missing, return null for that field.
+            Only extract information that has been explicitly mentioned."""}
         ]
         
         conversation_text = "\n".join([f"{msg['role']}: {msg['content']}" for msg in conversation_history])
