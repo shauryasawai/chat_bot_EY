@@ -1,5 +1,3 @@
-# models.py
-
 from django.db import models
 from django.utils import timezone
 import json
@@ -12,13 +10,15 @@ class Customer(models.Model):
         ('business_owner', 'Business Owner'),
         ('freelancer', 'Freelancer'),
         ('gig_worker', 'Gig Worker'),
+        ('government', 'Government'),
+        ('contract', 'Contract'),
         ('other', 'Other'),
     ]
     
     # Basic Information
     name = models.CharField(max_length=200)
     pan = models.CharField(max_length=10, unique=True)
-    date_of_birth = models.DateField(null=True, blank=True)  # NEW: Critical for age segmentation
+    date_of_birth = models.DateField(null=True, blank=True)
     
     # Contact Information
     phone = models.CharField(max_length=15, null=True, blank=True)
@@ -29,16 +29,43 @@ class Customer(models.Model):
     selfie_image = models.FileField(upload_to='selfies/', null=True, blank=True)
     aadhar = models.CharField(max_length=12, null=True, blank=True)
     
-    # Financial Information
-    credit_score = models.IntegerField(default=0)
-    pre_approved_limit = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    # Financial Information - UPDATED FOR DYNAMIC CREDIT SCORE
+    credit_score = models.IntegerField(default=0, help_text="Dynamically calculated credit score (300-900)")
+    score_category = models.CharField(max_length=20, null=True, blank=True, help_text="Excellent/Good/Fair/Poor")
+    pre_approved_limit = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=0,
+        help_text="Dynamically calculated maximum loan amount"
+    )
     
-    # NEW: Employment & Income Details (for segmentation)
+    # Employment & Income Details - EXPANDED
     employment_type = models.CharField(max_length=20, choices=EMPLOYMENT_CHOICES, null=True, blank=True)
     monthly_income = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     company_name = models.CharField(max_length=200, null=True, blank=True)
     
-    # NEW: Customer Segmentation (auto-calculated, stored for reference)
+    # NEW: Additional employment details for credit scoring
+    designation = models.CharField(
+        max_length=200, 
+        null=True, 
+        blank=True,
+        help_text="Job title/position (e.g., Senior Software Engineer, Manager)"
+    )
+    employment_duration_months = models.IntegerField(
+        null=True, 
+        blank=True,
+        help_text="Duration with current employer in months"
+    )
+    existing_obligations = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=0,
+        null=True,
+        blank=True,
+        help_text="Total monthly EMI of existing loans"
+    )
+    
+    # Customer Segmentation
     customer_segment = models.CharField(max_length=100, null=True, blank=True)
     segment_calculated_at = models.DateTimeField(null=True, blank=True)
     
@@ -48,6 +75,7 @@ class Customer(models.Model):
     pan_verification_confidence = models.IntegerField(null=True, blank=True)
     face_match_verified = models.BooleanField(default=False)
     face_match_confidence = models.IntegerField(null=True, blank=True)
+    selfie_verified = models.BooleanField(default=False)
     
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
@@ -79,6 +107,50 @@ class Customer(models.Model):
             self.customer_segment = segment_info['segment']
             self.segment_calculated_at = timezone.now()
             self.save(update_fields=['customer_segment', 'segment_calculated_at'])
+    
+    def calculate_credit_score(self):
+        """
+        Calculate dynamic credit score based on employment and income details
+        Returns dict with credit_score, score_category, and max_eligible_amount
+        """
+        from .agents import CreditScoreCalculator
+        
+        # Prepare loan details for scoring
+        loan_details = {
+            'company_name': self.company_name,
+            'designation': self.designation,
+            'monthly_income': float(self.monthly_income) if self.monthly_income else None,
+            'employment_duration_months': self.employment_duration_months,
+            'employment_type': self.employment_type,
+            'existing_obligations': float(self.existing_obligations) if self.existing_obligations else 0,
+            # For initial scoring, use average loan parameters
+            'loan_amount': float(self.monthly_income * 10) if self.monthly_income else 100000,
+            'tenure_months': 24
+        }
+        
+        return CreditScoreCalculator.calculate_credit_score(loan_details)
+    
+    def update_credit_score(self):
+        """Update credit score and pre-approved limit based on current data"""
+        from .agents import CreditScoreCalculator
+        
+        if not self.monthly_income:
+            return
+        
+        # Calculate credit score
+        credit_analysis = self.calculate_credit_score()
+        self.credit_score = credit_analysis['credit_score']
+        self.score_category = credit_analysis['score_category']
+        
+        # Calculate max loan amount (assuming 24 month tenure)
+        self.pre_approved_limit = CreditScoreCalculator.calculate_max_loan_amount(
+            float(self.monthly_income),
+            self.credit_score,
+            24,  # Default tenure
+            self.employment_type
+        )
+        
+        self.save(update_fields=['credit_score', 'score_category', 'pre_approved_limit'])
     
     def __str__(self):
         return f"{self.name} ({self.pan})"
@@ -156,7 +228,7 @@ class LoanApplication(models.Model):
     tenure_months = models.IntegerField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     
-    # NEW: Store segment at time of application
+    # Customer segment at time of application
     customer_segment_snapshot = models.CharField(max_length=100, null=True, blank=True)
     
     # Underwriting details
@@ -164,7 +236,26 @@ class LoanApplication(models.Model):
     approval_reason = models.TextField(null=True, blank=True)
     rejection_reason = models.TextField(null=True, blank=True)
     
-    # NEW: Underwriting metrics (age-aware)
+    # NEW: Dynamic Credit Score Assessment Data
+    credit_score = models.IntegerField(
+        null=True, 
+        blank=True,
+        help_text="Credit score calculated at time of application"
+    )
+    max_eligible_amount = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        null=True, 
+        blank=True,
+        help_text="Maximum loan amount customer is eligible for"
+    )
+    score_breakdown = models.JSONField(
+        null=True, 
+        blank=True,
+        help_text="Detailed breakdown of credit score calculation"
+    )
+    
+    # Underwriting metrics (age-aware)
     credit_score_threshold_used = models.IntegerField(null=True, blank=True)
     emi_ratio_threshold_used = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     
@@ -175,28 +266,26 @@ class LoanApplication(models.Model):
     salary_slip_data = models.JSONField(null=True, blank=True)
     sanction_letter_data = models.JSONField(null=True, blank=True)
     
-    # NEW: Additional documents for self-employed
+    # Additional documents for self-employed
     itr_document = models.FileField(upload_to='itr_documents/', null=True, blank=True)
     gst_document = models.FileField(upload_to='gst_documents/', null=True, blank=True)
     bank_statements = models.FileField(upload_to='bank_statements/', null=True, blank=True)
+    
+    # In-memory document storage (base64 encoded)
+    salary_slip_name = models.CharField(max_length=255, blank=True, null=True)
+    salary_slip_content = models.TextField(blank=True, null=True)  # base64 encoded
+    salary_slip_content_type = models.CharField(max_length=100, blank=True, null=True)
+    salary_slip_size = models.IntegerField(blank=True, null=True)
+    
+    sanction_letter_name = models.CharField(max_length=255, blank=True, null=True)
+    sanction_letter_content = models.TextField(blank=True, null=True)  # base64 encoded
+    sanction_letter_content_type = models.CharField(max_length=100, blank=True, null=True)
     
     # Timestamps
     applied_at = models.DateTimeField(auto_now_add=True)
     approved_at = models.DateTimeField(null=True, blank=True)
     rejected_at = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
-
-    # Salary slip storage
-    salary_slip_name = models.CharField(max_length=255, blank=True, null=True)
-    salary_slip_content = models.TextField(blank=True, null=True)  # base64 encoded
-    salary_slip_content_type = models.CharField(max_length=100, blank=True, null=True)
-    salary_slip_size = models.IntegerField(blank=True, null=True)
-    
-    # Sanction letter storage
-    sanction_letter_name = models.CharField(max_length=255, blank=True, null=True)
-    sanction_letter_content = models.TextField(blank=True, null=True)  # base64 encoded
-    sanction_letter_content_type = models.CharField(max_length=100, blank=True, null=True)
     
     def save(self, *args, **kwargs):
         """Auto-populate segment snapshot on creation"""
@@ -218,6 +307,19 @@ class LoanApplication(models.Model):
         self.rejected_at = timezone.now()
         self.save()
     
+    def calculate_monthly_emi(self):
+        """Calculate simple EMI (without interest for now)"""
+        if self.tenure_months > 0:
+            return float(self.loan_amount) / self.tenure_months
+        return 0
+    
+    def get_emi_to_income_ratio(self):
+        """Calculate EMI to income ratio"""
+        if self.customer and self.customer.monthly_income:
+            emi = self.calculate_monthly_emi()
+            return (emi / float(self.customer.monthly_income)) * 100
+        return None
+    
     def __str__(self):
         return f"LA-{self.id:06d} - {self.customer.name} - ₹{self.loan_amount}"
     
@@ -234,10 +336,10 @@ class DocumentVerification(models.Model):
         ('pan_card', 'PAN Card'),
         ('aadhar_card', 'Aadhar Card'),
         ('salary_slip', 'Salary Slip'),
-        ('selfie', 'Selfie'),  # NEW
-        ('itr', 'ITR Document'),  # NEW
-        ('gst', 'GST Document'),  # NEW
-        ('bank_statement', 'Bank Statement'),  # NEW
+        ('selfie', 'Selfie'),
+        ('itr', 'ITR Document'),
+        ('gst', 'GST Document'),
+        ('bank_statement', 'Bank Statement'),
     ]
     
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name='verifications')

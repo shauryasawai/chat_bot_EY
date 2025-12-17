@@ -14,6 +14,7 @@ from .agents import (
     UnderwritingAgent, 
     SanctionLetterGenerator,
     CustomerSegmentation)
+import base64
 
 
 def index(request):
@@ -98,7 +99,7 @@ def upload_selfie(request):
             'message': 'PAN card verification not completed. Please complete previous steps.'
         }, status=400)
     
-    # ✅ Check if we have temporary PAN image data for face matching
+    # Check if we have temporary PAN image data for face matching
     if not session.temp_pan_image_data:
         return JsonResponse({
             'success': False,
@@ -120,7 +121,7 @@ def upload_selfie(request):
         selfie_image.seek(0)
         selfie_data = selfie_image.read()
         
-        # ✅ Decode PAN card image from base64
+        # Decode PAN card image from base64
         pan_card_data = base64.b64decode(session.temp_pan_image_data)
         
         # Perform face matching using raw bytes
@@ -135,13 +136,12 @@ def upload_selfie(request):
         
         if faces_match and confidence >= 20:
             # Face match successful
-            # ✅ NO FILE STORAGE - Just save verification metadata
             customer.selfie_verified = True
             customer.face_match_verified = True
             customer.face_match_confidence = confidence
             customer.save()
             
-            # ✅ Clear temporary PAN image data (no longer needed)
+            # Clear temporary PAN image data (no longer needed)
             session.temp_pan_image_data = None
             
             # Update session to loan details stage
@@ -367,121 +367,178 @@ def chat(request):
         current_agent = 'sales'
         loan_details = sales_agent.extract_loan_details(conversation, age_segment)
         
-        if loan_details and all([
+        # Check if all required information is collected
+        all_info_collected = loan_details.get('all_required_info_collected', False)
+        
+        if all_info_collected and all([
             loan_details.get('loan_amount'),
             loan_details.get('purpose'),
-            loan_details.get('tenure_months')
+            loan_details.get('tenure_months'),
+            loan_details.get('monthly_income'),
+            loan_details.get('employment_type')
         ]):
-            # All loan details collected
-            if not session.customer:
-                # Should not happen, but handle gracefully
-                response = "Please complete PAN verification first."
-                session.stage = 'pan_verification'
-                workflow_stage = 'pan_verification'
-                requires_upload = True
-                upload_type = 'pan_card'
-            else:
-                # Update customer with additional details
-                if loan_details.get('employment_type'):
-                    session.customer.employment_type = loan_details['employment_type']
-                if loan_details.get('monthly_income'):
-                    session.customer.monthly_income = loan_details['monthly_income']
-                session.customer.save()
-                
-                # Refresh age segment with updated data
-                age_segment = get_age_segment(session)
-                
-                # Create loan application
-                loan_app = LoanApplication.objects.create(
-                    customer=session.customer,
-                    loan_amount=loan_details['loan_amount'],
-                    purpose=loan_details['purpose'],
-                    tenure_months=loan_details['tenure_months'],
-                    status='under_review'
-                )
-                
-                session.stage = 'salary_verification'
-                workflow_stage = 'salary_verification'
-                current_agent = 'underwriting'
-                
-                # Assess loan with age-aware underwriting
-                assessment = underwriting_agent.assess_loan(
-                    session.customer,
-                    loan_details['loan_amount'],
-                    loan_details['tenure_months'],
-                    age_segment
-                )
-                
-                if assessment['approved'] == True:
-                    # Loan approved
-                    loan_app.status = 'approved'
-                    loan_app.save()
-                    
-                    # Generate sanction letter with segment info
-                    try:
-                        sanction_letter = SanctionLetterGenerator.generate_letter(loan_app, age_segment)
-                        loan_app.sanction_letter.save(
-                            f'sanction_{loan_app.id}.pdf', 
-                            sanction_letter, 
-                            save=True
+            # Additional validation for salaried employees
+            if loan_details.get('employment_type') == 'salaried':
+                if not loan_details.get('company_name') or not loan_details.get('designation'):
+                    # Continue collecting mandatory salaried info
+                    response = sales_agent.engage_customer(session, conversation, age_segment)
+                    current_agent = 'sales'
+                else:
+                    # All information collected - proceed to assessment
+                    if not session.customer:
+                        # Should not happen, but handle gracefully
+                        response = "Please complete PAN verification first."
+                        session.stage = 'pan_verification'
+                        workflow_stage = 'pan_verification'
+                        requires_upload = True
+                        upload_type = 'pan_card'
+                    else:
+                        # Update customer with all collected details
+                        if loan_details.get('employment_type'):
+                            session.customer.employment_type = loan_details['employment_type']
+                        if loan_details.get('monthly_income'):
+                            session.customer.monthly_income = loan_details['monthly_income']
+                        if loan_details.get('company_name'):
+                            session.customer.company_name = loan_details['company_name']
+                        if loan_details.get('designation'):
+                            session.customer.designation = loan_details['designation']
+                        if loan_details.get('employment_duration_months'):
+                            session.customer.employment_duration_months = loan_details['employment_duration_months']
+                        if loan_details.get('existing_obligations'):
+                            session.customer.existing_obligations = loan_details['existing_obligations']
+                        
+                        session.customer.save()
+                        
+                        # Refresh age segment with updated data
+                        age_segment = get_age_segment(session)
+                        
+                        # Create loan application
+                        loan_app = LoanApplication.objects.create(
+                            customer=session.customer,
+                            loan_amount=loan_details['loan_amount'],
+                            purpose=loan_details['purpose'],
+                            tenure_months=loan_details['tenure_months'],
+                            status='under_review'
                         )
                         
-                        segment_note = f" {assessment.get('segment_note', '')}" if assessment.get('segment_note') else ""
-                        response = (
-                            f"🎉 Congratulations! Your loan of ₹{loan_details['loan_amount']:,.2f} "
-                            f"has been approved! {assessment['reason']}.{segment_note} "
-                            f"Your sanction letter is ready for download."
+                        session.stage = 'salary_verification'
+                        workflow_stage = 'salary_verification'
+                        current_agent = 'underwriting'
+                        
+                        # Assess loan with dynamic credit score calculation
+                        assessment = underwriting_agent.assess_loan(
+                            session.customer,
+                            loan_details['loan_amount'],
+                            loan_details['tenure_months'],
+                            age_segment,
+                            loan_details  # Pass full loan details for credit score calculation
                         )
-                    except Exception as e:
-                        response = (
-                            f"🎉 Congratulations! Your loan of ₹{loan_details['loan_amount']:,.2f} "
-                            f"has been approved! {assessment['reason']}. "
-                            f"(Note: Sanction letter generation encountered an issue: {str(e)})"
-                        )
-                    
-                    session.stage = 'completed'
-                    workflow_stage = 'completed'
-                    
-                elif assessment['approved'] == 'pending_salary_slip':
-                    # Requires salary slip verification
-                    response = (
-                        f"Your loan requires additional verification. {assessment['reason']}. "
-                        f"Please upload your latest salary slip to proceed."
-                    )
-                    requires_upload = True
-                    upload_type = 'salary_slip'
-                
-                elif assessment['approved'] == 'pending_business_docs':
-                    # Requires business documents (for self-employed)
-                    docs_needed = ', '.join(assessment.get('documents_needed', []))
-                    response = (
-                        f"As a self-employed professional, we need additional documentation. "
-                        f"{assessment['reason']}. Please prepare: {docs_needed}. "
-                        f"You can upload your salary slip for now, and we'll guide you through the rest."
-                    )
-                    requires_upload = True
-                    upload_type = 'salary_slip'
-                
-                elif assessment['approved'] == 'pending_guarantor':
-                    # Requires guarantor (for new-to-credit)
-                    response = (
-                        f"{assessment['reason']}. This is standard for first-time borrowers. "
-                        f"For now, please upload your salary slip, and we'll discuss guarantor details."
-                    )
-                    requires_upload = True
-                    upload_type = 'salary_slip'
-                    
-                else:
-                    # Loan rejected
-                    loan_app.status = 'rejected'
-                    loan_app.rejection_reason = assessment['reason']
-                    loan_app.save()
-                    response = (
-                        f"I'm sorry, but your loan application cannot be approved at this time. "
-                        f"Reason: {assessment['reason']}"
-                    )
-                    session.stage = 'rejected'
-                    workflow_stage = 'rejected'
+                        
+                        # Generate response based on assessment
+                        credit_info = f" Your calculated credit score is {assessment['credit_score']} ({assessment['score_category']})"
+                        max_eligible = f" You are eligible for loans up to ₹{assessment['max_eligible_amount']:,.2f}"
+                        
+                        if assessment['approved'] == True:
+                            # Loan approved
+                            loan_app.status = 'approved'
+                            loan_app.credit_score = assessment['credit_score']
+                            loan_app.max_eligible_amount = assessment['max_eligible_amount']
+                            loan_app.save()
+                            
+                            # Generate sanction letter with segment info
+                            try:
+                                sanction_letter = SanctionLetterGenerator.generate_letter(loan_app, age_segment)
+                                loan_app.sanction_letter.save(
+                                    f'sanction_{loan_app.id}.pdf', 
+                                    sanction_letter, 
+                                    save=True
+                                )
+                                
+                                segment_note = f" {assessment.get('segment_note', '')}" if assessment.get('segment_note') else ""
+                                response = (
+                                    f"🎉 Congratulations! Your loan of ₹{loan_details['loan_amount']:,.2f} "
+                                    f"has been approved!{credit_info}.{max_eligible} "
+                                    f"{assessment['reason']}.{segment_note} "
+                                    f"Your sanction letter is ready for download."
+                                )
+                            except Exception as e:
+                                response = (
+                                    f"🎉 Congratulations! Your loan of ₹{loan_details['loan_amount']:,.2f} "
+                                    f"has been approved!{credit_info}. {assessment['reason']}. "
+                                    f"(Note: Sanction letter generation encountered an issue: {str(e)})"
+                                )
+                            
+                            session.stage = 'completed'
+                            workflow_stage = 'completed'
+                            
+                        elif assessment['approved'] == 'pending_salary_slip':
+                            # Requires salary slip verification
+                            loan_app.credit_score = assessment['credit_score']
+                            loan_app.max_eligible_amount = assessment['max_eligible_amount']
+                            loan_app.save()
+                            
+                            response = (
+                                f"Based on your profile:{credit_info}.{max_eligible} "
+                                f"{assessment['reason']}. Please upload your latest salary slip to proceed with approval."
+                            )
+                            requires_upload = True
+                            upload_type = 'salary_slip'
+                        
+                        elif assessment['approved'] == 'pending_business_docs':
+                            # Requires business documents (for self-employed)
+                            loan_app.credit_score = assessment['credit_score']
+                            loan_app.max_eligible_amount = assessment['max_eligible_amount']
+                            loan_app.save()
+                            
+                            docs_needed = ', '.join(assessment.get('documents_needed', []))
+                            response = (
+                                f"As a self-employed professional:{credit_info}.{max_eligible} "
+                                f"{assessment['reason']}. Please prepare: {docs_needed}. "
+                                f"You can upload your salary slip or business documents now."
+                            )
+                            requires_upload = True
+                            upload_type = 'salary_slip'
+                        
+                        elif assessment['approved'] == 'pending_guarantor':
+                            # Requires guarantor (for new-to-credit)
+                            loan_app.credit_score = assessment['credit_score']
+                            loan_app.max_eligible_amount = assessment['max_eligible_amount']
+                            loan_app.save()
+                            
+                            response = (
+                                f"Based on your profile:{credit_info}.{max_eligible} "
+                                f"{assessment['reason']}. This is standard for first-time borrowers. "
+                                f"For now, please upload your salary slip, and we'll discuss guarantor details."
+                            )
+                            requires_upload = True
+                            upload_type = 'salary_slip'
+                            
+                        else:
+                            # Loan rejected or over max eligible
+                            loan_app.status = 'rejected'
+                            loan_app.rejection_reason = assessment['reason']
+                            loan_app.credit_score = assessment['credit_score']
+                            loan_app.max_eligible_amount = assessment['max_eligible_amount']
+                            loan_app.save()
+                            
+                            suggestion = assessment.get('suggestion', '')
+                            response = (
+                                f"Based on your profile:{credit_info}.{max_eligible} "
+                                f"Your loan application status: {assessment['reason']}. {suggestion}"
+                            )
+                            
+                            # If over max eligible, suggest lower amount
+                            if 'exceeds' in assessment['reason'].lower():
+                                session.stage = 'loan_details'
+                                workflow_stage = 'loan_details'
+                                response += " Would you like to apply for a lower amount?"
+                            else:
+                                session.stage = 'rejected'
+                                workflow_stage = 'rejected'
+            else:
+                # Non-salaried or missing info - continue collecting
+                response = sales_agent.engage_customer(session, conversation, age_segment)
+                current_agent = 'sales'
         else:
             # Continue collecting loan details with age-aware engagement
             response = sales_agent.engage_customer(session, conversation, age_segment)
@@ -529,8 +586,6 @@ def chat(request):
     
     return JsonResponse(response_data)
 
-
-import base64
 
 @csrf_exempt
 @require_http_methods(["POST"])
@@ -591,7 +646,7 @@ def upload_pan_card(request):
         pan_image.seek(0)
         pan_image_data = pan_image.read()
         
-        # ✅ Store PAN image as base64 in session for later face matching
+        # Store PAN image as base64 in session for later face matching
         pan_base64 = base64.b64encode(pan_image_data).decode('utf-8')
         session.temp_pan_image_data = pan_base64
         
@@ -686,12 +741,12 @@ def upload_pan_card(request):
                     date_of_birth=dob_obj,
                     pan_verified=True,
                     pan_verification_confidence=verification_result.get('confidence_score'),
-                    credit_score=750,  # Default, should fetch from credit bureau
-                    pre_approved_limit=100000  # Default limit
+                    credit_score=0,  # Will be calculated dynamically
+                    pre_approved_limit=0  # Will be calculated dynamically
                 )
                 is_existing = False
             
-            # ✅ NO FILE STORAGE - Just save verification metadata
+            # Save customer
             customer.save()
             
             # Update session
@@ -782,6 +837,7 @@ def upload_pan_card(request):
             'message': f'Verification error: {str(e)}',
             'error_details': str(e)
         }, status=500)
+
 
 @csrf_exempt
 @require_http_methods(["POST"])
@@ -924,9 +980,10 @@ def upload_salary_slip(request):
             'message': f'Upload failed: {str(e)}'
         }, status=500)
 
-# Add to your views.py
+
 @csrf_exempt
 def set_language(request):
+    """Set language preference for the session"""
     data = json.loads(request.body)
     session_id = data.get('session_id')
     language = data.get('language', 'en')
@@ -942,8 +999,10 @@ def set_language(request):
     
     return JsonResponse({'success': True})
 
+
 @csrf_exempt
 def download_sanction_letter(request, loan_id):
+    """Download sanction letter PDF"""
     try:
         # Get loan application
         loan_application = get_object_or_404(LoanApplication, id=loan_id)

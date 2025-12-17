@@ -63,6 +63,336 @@ TRANSLATIONS = {
         }
     }
 }
+
+class CreditScoreCalculator:
+    """
+    Dynamic credit score calculator based on employment, income, and loan details
+    """
+    
+    # Company tier ratings (you can expand this list)
+    COMPANY_TIERS = {
+        'tier_1': {
+            'companies': [
+                'google', 'microsoft', 'amazon', 'apple', 'meta', 'facebook',
+                'tcs', 'infosys', 'wipro', 'hcl', 'tech mahindra',
+                'reliance', 'tata', 'mahindra', 'birla', 'adani',
+                'hdfc', 'icici', 'sbi', 'axis', 'kotak',
+                'flipkart', 'swiggy', 'zomato', 'paytm', 'ola'
+            ],
+            'score': 150
+        },
+        'tier_2': {
+            'companies': [
+                'cognizant', 'capgemini', 'accenture', 'deloitte', 'pwc',
+                'samsung', 'lg', 'sony', 'dell', 'hp',
+                'government', 'psu', 'public sector'
+            ],
+            'score': 120
+        },
+        'tier_3': {
+            'companies': [],  # Default for unlisted companies
+            'score': 80
+        }
+    }
+    
+    # Job designation scores
+    DESIGNATION_SCORES = {
+        'senior': ['senior', 'lead', 'manager', 'director', 'vp', 'head', 'chief', 'principal', 'architect'],
+        'mid': ['engineer', 'developer', 'analyst', 'consultant', 'specialist', 'executive', 'associate'],
+        'junior': ['junior', 'trainee', 'intern', 'assistant', 'fresher', 'entry']
+    }
+    
+    @staticmethod
+    def calculate_company_score(company_name):
+        """Calculate score based on company reputation"""
+        if not company_name:
+            return 80
+        
+        company_lower = company_name.lower()
+        
+        # Check Tier 1 companies
+        for company in CreditScoreCalculator.COMPANY_TIERS['tier_1']['companies']:
+            if company in company_lower:
+                return CreditScoreCalculator.COMPANY_TIERS['tier_1']['score']
+        
+        # Check Tier 2 companies
+        for company in CreditScoreCalculator.COMPANY_TIERS['tier_2']['companies']:
+            if company in company_lower:
+                return CreditScoreCalculator.COMPANY_TIERS['tier_2']['score']
+        
+        # Default Tier 3
+        return CreditScoreCalculator.COMPANY_TIERS['tier_3']['score']
+    
+    @staticmethod
+    def calculate_designation_score(designation):
+        """Calculate score based on job designation/seniority"""
+        if not designation:
+            return 50
+        
+        designation_lower = designation.lower()
+        
+        # Senior roles
+        for keyword in CreditScoreCalculator.DESIGNATION_SCORES['senior']:
+            if keyword in designation_lower:
+                return 100
+        
+        # Mid-level roles
+        for keyword in CreditScoreCalculator.DESIGNATION_SCORES['mid']:
+            if keyword in designation_lower:
+                return 70
+        
+        # Junior roles
+        for keyword in CreditScoreCalculator.DESIGNATION_SCORES['junior']:
+            if keyword in designation_lower:
+                return 40
+        
+        # Default
+        return 50
+    
+    @staticmethod
+    def calculate_income_score(monthly_income):
+        """Calculate score based on monthly income"""
+        if not monthly_income:
+            return 50
+        
+        income = float(monthly_income)
+        
+        if income >= 100000:
+            return 150
+        elif income >= 75000:
+            return 130
+        elif income >= 50000:
+            return 110
+        elif income >= 40000:
+            return 90
+        elif income >= 30000:
+            return 70
+        elif income >= 20000:
+            return 50
+        else:
+            return 30
+    
+    @staticmethod
+    def calculate_employment_duration_score(duration_months):
+        """Calculate score based on job stability"""
+        if not duration_months:
+            return 50
+        
+        months = int(duration_months)
+        
+        if months >= 36:  # 3+ years
+            return 100
+        elif months >= 24:  # 2+ years
+            return 80
+        elif months >= 12:  # 1+ years
+            return 60
+        elif months >= 6:  # 6+ months
+            return 40
+        else:
+            return 20
+    
+    @staticmethod
+    def calculate_loan_to_income_ratio_score(loan_amount, monthly_income, tenure_months):
+        """Calculate score based on loan affordability"""
+        if not loan_amount or not monthly_income or not tenure_months:
+            return 50
+        
+        monthly_emi = float(loan_amount) / int(tenure_months)
+        income = float(monthly_income)
+        emi_ratio = monthly_emi / income
+        
+        if emi_ratio <= 0.20:  # EMI is 20% or less of income
+            return 100
+        elif emi_ratio <= 0.30:
+            return 80
+        elif emi_ratio <= 0.40:
+            return 60
+        elif emi_ratio <= 0.50:
+            return 40
+        else:
+            return 20
+    
+    @staticmethod
+    def calculate_employment_type_score(employment_type):
+        """Calculate score based on employment type"""
+        type_scores = {
+            'salaried': 100,
+            'government': 120,
+            'self_employed': 70,
+            'business': 70,
+            'gig_worker': 40,
+            'freelancer': 50,
+            'contract': 60
+        }
+        
+        if not employment_type:
+            return 50
+        
+        return type_scores.get(employment_type.lower(), 50)
+    
+    @staticmethod
+    def calculate_existing_obligations_score(monthly_income, existing_obligations):
+        """Calculate score based on existing loan obligations"""
+        if not monthly_income:
+            return 50
+        
+        if not existing_obligations or existing_obligations == 0:
+            return 100
+        
+        income = float(monthly_income)
+        obligations = float(existing_obligations)
+        obligation_ratio = obligations / income
+        
+        if obligation_ratio <= 0.10:
+            return 90
+        elif obligation_ratio <= 0.20:
+            return 70
+        elif obligation_ratio <= 0.30:
+            return 50
+        elif obligation_ratio <= 0.40:
+            return 30
+        else:
+            return 10
+    
+    @staticmethod
+    def calculate_credit_score(loan_details):
+        """
+        Calculate comprehensive credit score based on all parameters
+        
+        Parameters:
+        - company_name: Company where customer works
+        - designation: Job title/position
+        - monthly_income: Monthly salary/income
+        - employment_duration_months: Time with current employer
+        - employment_type: Type of employment
+        - loan_amount: Requested loan amount
+        - tenure_months: Loan tenure
+        - existing_obligations: Existing EMI obligations
+        
+        Returns: dict with credit_score and breakdown
+        """
+        
+        scores = {}
+        
+        # Company reputation (Weight: 15%)
+        scores['company'] = CreditScoreCalculator.calculate_company_score(
+            loan_details.get('company_name')
+        )
+        
+        # Job designation/seniority (Weight: 10%)
+        scores['designation'] = CreditScoreCalculator.calculate_designation_score(
+            loan_details.get('designation')
+        )
+        
+        # Monthly income (Weight: 25%)
+        scores['income'] = CreditScoreCalculator.calculate_income_score(
+            loan_details.get('monthly_income')
+        )
+        
+        # Employment duration/stability (Weight: 15%)
+        scores['employment_duration'] = CreditScoreCalculator.calculate_employment_duration_score(
+            loan_details.get('employment_duration_months')
+        )
+        
+        # Employment type (Weight: 10%)
+        scores['employment_type'] = CreditScoreCalculator.calculate_employment_type_score(
+            loan_details.get('employment_type')
+        )
+        
+        # Loan affordability (Weight: 15%)
+        scores['loan_affordability'] = CreditScoreCalculator.calculate_loan_to_income_ratio_score(
+            loan_details.get('loan_amount'),
+            loan_details.get('monthly_income'),
+            loan_details.get('tenure_months')
+        )
+        
+        # Existing obligations (Weight: 10%)
+        scores['existing_obligations'] = CreditScoreCalculator.calculate_existing_obligations_score(
+            loan_details.get('monthly_income'),
+            loan_details.get('existing_obligations', 0)
+        )
+        
+        # Calculate weighted credit score
+        weights = {
+            'company': 0.15,
+            'designation': 0.10,
+            'income': 0.25,
+            'employment_duration': 0.15,
+            'employment_type': 0.10,
+            'loan_affordability': 0.15,
+            'existing_obligations': 0.10
+        }
+        
+        credit_score = sum(scores[key] * weights[key] for key in scores.keys())
+        
+        # Normalize to 300-900 range (standard credit score range)
+        min_possible = 300
+        max_possible = 900
+        normalized_score = min_possible + (credit_score / 150) * (max_possible - min_possible)
+        normalized_score = max(min_possible, min(max_possible, normalized_score))
+        
+        return {
+            'credit_score': int(normalized_score),
+            'score_breakdown': scores,
+            'raw_score': credit_score,
+            'score_category': CreditScoreCalculator.get_score_category(int(normalized_score))
+        }
+    
+    @staticmethod
+    def get_score_category(credit_score):
+        """Categorize credit score"""
+        if credit_score >= 750:
+            return 'Excellent'
+        elif credit_score >= 700:
+            return 'Good'
+        elif credit_score >= 650:
+            return 'Fair'
+        else:
+            return 'Poor'
+    
+    @staticmethod
+    def calculate_max_loan_amount(monthly_income, credit_score, tenure_months, employment_type):
+        """
+        Calculate maximum loan amount based on income and credit score
+        """
+        if not monthly_income:
+            return 50000  # Minimum loan amount
+        
+        income = float(monthly_income)
+        
+        # Base calculation: Maximum EMI is 40-50% of income based on credit score
+        if credit_score >= 750:
+            max_emi_ratio = 0.50
+        elif credit_score >= 700:
+            max_emi_ratio = 0.45
+        elif credit_score >= 650:
+            max_emi_ratio = 0.40
+        else:
+            max_emi_ratio = 0.35
+        
+        max_monthly_emi = income * max_emi_ratio
+        max_loan = max_monthly_emi * tenure_months
+        
+        # Apply multipliers based on employment type
+        employment_multipliers = {
+            'salaried': 1.0,
+            'government': 1.2,
+            'self_employed': 0.8,
+            'business': 0.8,
+            'gig_worker': 0.6,
+            'freelancer': 0.7
+        }
+        
+        multiplier = employment_multipliers.get(employment_type.lower() if employment_type else 'salaried', 1.0)
+        max_loan = max_loan * multiplier
+        
+        # Set reasonable limits
+        min_loan = 10000
+        absolute_max = income * 48  # Maximum 4 years of salary
+        
+        return max(min_loan, min(max_loan, absolute_max))
+    
+
 class CustomerSegmentation:
     """Helper class to determine customer segment based on age and profile"""
     
@@ -400,74 +730,171 @@ class UnderwritingAgent(BaseAgent):
     def __init__(self):
         super().__init__("Underwriting Agent", "Credit Assessment")
     
-    def assess_loan(self, customer, loan_amount, tenure, age_segment=None):
-        """Age-aware loan assessment"""
+    def assess_loan(self, customer, loan_amount, tenure, age_segment=None, loan_details=None):
+        """
+        Dynamic loan assessment based on calculated credit score from user information
+        
+        Parameters:
+        - customer: Customer object
+        - loan_amount: Requested loan amount
+        - tenure: Loan tenure in months
+        - age_segment: Customer age segment
+        - loan_details: Dict containing all loan and employment details
+        """
+        from decimal import Decimal
+        
         loan_amount = Decimal(str(loan_amount))
-        credit_score = customer.credit_score
-        pre_approved_limit = customer.pre_approved_limit
         
-        # Age-based risk adjustment
-        age = CustomerSegmentation.get_age_from_dob(customer.date_of_birth) if hasattr(customer, 'date_of_birth') else None
+        # If loan_details not provided, create from customer data
+        if not loan_details:
+            loan_details = {
+                'company_name': getattr(customer, 'company_name', None),
+                'designation': getattr(customer, 'designation', None),
+                'monthly_income': getattr(customer, 'monthly_income', None),
+                'employment_duration_months': getattr(customer, 'employment_duration_months', None),
+                'employment_type': getattr(customer, 'employment_type', None),
+                'loan_amount': float(loan_amount),
+                'tenure_months': tenure,
+                'existing_obligations': getattr(customer, 'existing_obligations', 0)
+            }
+        else:
+            # Ensure loan_amount and tenure are in loan_details
+            loan_details['loan_amount'] = float(loan_amount)
+            loan_details['tenure_months'] = tenure
         
-        # Adjusted credit score threshold based on age segment
+        # Calculate dynamic credit score
+        credit_analysis = CreditScoreCalculator.calculate_credit_score(loan_details)
+        calculated_credit_score = credit_analysis['credit_score']
+        score_category = credit_analysis['score_category']
+        
+        # Store calculated credit score in customer record
+        customer.credit_score = calculated_credit_score
+        customer.score_category = score_category
+        
+        # Calculate maximum eligible loan amount
+        max_loan_amount = CreditScoreCalculator.calculate_max_loan_amount(
+            loan_details.get('monthly_income'),
+            calculated_credit_score,
+            tenure,
+            loan_details.get('employment_type')
+        )
+        
+        # Store max loan amount as pre-approved limit
+        customer.pre_approved_limit = max_loan_amount
+        customer.save()
+        
+        # Age-based minimum credit score threshold
         min_credit_score = 700
         if age_segment:
             if age_segment['segment'] == 'Low-Income or New-to-Credit Applicant':
-                min_credit_score = 650  # More lenient for first-time borrowers
+                min_credit_score = 600  # More lenient for first-time borrowers
             elif age_segment['segment'] == 'Young Salaried Professional':
-                min_credit_score = 680
+                min_credit_score = 650
             elif age_segment['segment'] == 'Mid-Career Salaried with Family':
-                min_credit_score = 720  # Higher due to more obligations
+                min_credit_score = 680
+            elif age_segment['segment'] == 'Self-Employed Professional/Small Business Owner':
+                min_credit_score = 670
+            elif age_segment['segment'] == 'Existing Kite Capital Customer':
+                min_credit_score = 620  # Lenient for existing customers
         
-        # Rule 1: Credit score check with age adjustment
-        if credit_score < min_credit_score:
+        # Rule 1: Credit score check
+        if calculated_credit_score < min_credit_score:
             return {
                 'approved': False,
-                'reason': f'Credit score below minimum threshold of {min_credit_score} for your profile'
+                'reason': f'Calculated credit score ({calculated_credit_score} - {score_category}) is below minimum threshold of {min_credit_score} for your profile',
+                'credit_score': calculated_credit_score,
+                'score_category': score_category,
+                'max_eligible_amount': max_loan_amount,
+                'score_breakdown': credit_analysis['score_breakdown']
             }
         
-        # Rule 2: Instant approval if within pre-approved limit
-        if loan_amount <= pre_approved_limit:
+        # Rule 2: Check if requested amount exceeds maximum eligible
+        if loan_amount > Decimal(str(max_loan_amount)):
+            return {
+                'approved': False,
+                'reason': f'Requested amount ₹{loan_amount:,.2f} exceeds your maximum eligible amount of ₹{max_loan_amount:,.2f} based on your profile',
+                'credit_score': calculated_credit_score,
+                'score_category': score_category,
+                'max_eligible_amount': max_loan_amount,
+                'score_breakdown': credit_analysis['score_breakdown'],
+                'suggestion': f'You can apply for up to ₹{max_loan_amount:,.2f}'
+            }
+        
+        # Rule 3: Instant approval if within 80% of max eligible (strong profile)
+        if loan_amount <= Decimal(str(max_loan_amount * 0.8)) and calculated_credit_score >= 700:
             return {
                 'approved': True,
                 'instant': True,
-                'reason': 'Within pre-approved limit',
-                'segment_note': f"Fast-tracked for {age_segment['segment']}" if age_segment else ""
+                'reason': f'Excellent profile! Credit score: {calculated_credit_score} ({score_category}). Loan approved instantly',
+                'credit_score': calculated_credit_score,
+                'score_category': score_category,
+                'max_eligible_amount': max_loan_amount,
+                'segment_note': f"Fast-tracked approval for {age_segment['segment']}" if age_segment else "",
+                'score_breakdown': credit_analysis['score_breakdown']
             }
         
-        # Rule 3: Age-segment specific evaluation
+        # Rule 4: Age-segment specific evaluation
         if age_segment:
             if age_segment['segment'] == 'Self-Employed Professional/Small Business Owner':
-                # Request business documents
-                return {
-                    'approved': 'pending_business_docs',
-                    'reason': 'Requires ITR, GST, and bank statements',
-                    'documents_needed': ['ITR (last 2 years)', 'GST returns', 'Bank statements (6 months)']
-                }
+                # Request business documents for higher amounts or lower scores
+                if calculated_credit_score < 700 or loan_amount > Decimal(str(max_loan_amount * 0.6)):
+                    return {
+                        'approved': 'pending_business_docs',
+                        'reason': f'Credit score: {calculated_credit_score} ({score_category}). Additional business documentation required for verification',
+                        'documents_needed': ['ITR (last 2 years)', 'GST returns', 'Bank statements (6 months)'],
+                        'credit_score': calculated_credit_score,
+                        'score_category': score_category,
+                        'max_eligible_amount': max_loan_amount
+                    }
             
             elif age_segment['segment'] == 'Low-Income or New-to-Credit Applicant':
-                # More documentation needed
-                if loan_amount <= (pre_approved_limit * 1.5):
+                # More documentation needed for new-to-credit
+                if calculated_credit_score < 650:
                     return {
                         'approved': 'pending_guarantor',
-                        'reason': 'Requires guarantor or co-applicant for new-to-credit customers'
+                        'reason': f'Credit score: {calculated_credit_score} ({score_category}). Guarantor or co-applicant required for new-to-credit customers',
+                        'credit_score': calculated_credit_score,
+                        'score_category': score_category,
+                        'max_eligible_amount': max_loan_amount
                     }
         
-        # Rule 4: Request salary slip if ≤ 2× pre-approved limit
-        if loan_amount <= (pre_approved_limit * 2):
+        # Rule 5: Request salary slip for moderate scores or higher loan amounts
+        if calculated_credit_score < 700 or loan_amount > Decimal(str(max_loan_amount * 0.6)):
             return {
                 'approved': 'pending_salary_slip',
-                'reason': 'Requires salary slip verification'
+                'reason': f'Credit score: {calculated_credit_score} ({score_category}). Salary slip verification required',
+                'credit_score': calculated_credit_score,
+                'score_category': score_category,
+                'max_eligible_amount': max_loan_amount,
+                'score_breakdown': credit_analysis['score_breakdown']
             }
         
-        # Rule 5: Reject if > 2× pre-approved limit
+        # Rule 6: Approve for good scores and reasonable amounts
+        if calculated_credit_score >= 650:
+            return {
+                'approved': True,
+                'reason': f'Good profile! Credit score: {calculated_credit_score} ({score_category}). Loan approved',
+                'credit_score': calculated_credit_score,
+                'score_category': score_category,
+                'max_eligible_amount': max_loan_amount,
+                'segment_note': f"Approved for {age_segment['segment']}" if age_segment else "",
+                'score_breakdown': credit_analysis['score_breakdown']
+            }
+        
+        # Default: Reject
         return {
             'approved': False,
-            'reason': 'Loan amount exceeds 2× pre-approved limit'
+            'reason': f'Unable to approve at this time. Credit score: {calculated_credit_score} ({score_category})',
+            'credit_score': calculated_credit_score,
+            'score_category': score_category,
+            'max_eligible_amount': max_loan_amount,
+            'score_breakdown': credit_analysis['score_breakdown']
         }
     
     def validate_salary_emi(self, salary, loan_amount, tenure_months, age_segment=None):
         """Validate EMI affordability with age-aware limits"""
+        from decimal import Decimal
+        
         monthly_emi = Decimal(str(loan_amount)) / tenure_months
         salary_decimal = Decimal(str(salary))
         
@@ -485,7 +912,6 @@ class UnderwritingAgent(BaseAgent):
         if monthly_emi <= (salary_decimal * max_emi_ratio):
             return True, f"EMI within {max_emi_ratio*100}% of salary"
         return False, f"EMI exceeds {max_emi_ratio*100}% of monthly salary"
-
 
 class SanctionLetterGenerator:
     @staticmethod
@@ -974,61 +1400,102 @@ Tailor your questions based on this profile. """
             # Add segment-specific question guidance
             if 'Young Salaried Professional' in age_segment['segment']:
                 segment_context += """
-Ask about:
-- Employment details (company type, designation)
-- Monthly take-home salary
+MANDATORY questions to ask (one at a time):
+- Loan amount needed
 - Loan purpose (gadgets, travel, education, emergency)
-- Preferred digital payment methods
-- Quick EMI affordability check"""
+- Preferred loan tenure (in months)
+- Company name where you work
+- Your designation/job title
+- Monthly take-home salary (MANDATORY)
+- How long have you been with current employer
+- Any existing loan EMIs
+- Preferred digital payment methods"""
             
             elif 'Mid-Career Salaried with Family' in age_segment['segment']:
                 segment_context += """
-Ask about:
+MANDATORY questions to ask (one at a time):
+- Loan amount needed
+- Loan purpose (children's education, medical, home renovation, wedding, debt consolidation)
+- Preferred loan tenure for budget planning (in months)
+- Company name where you work
+- Your designation/position
+- Monthly income (MANDATORY)
+- How long have you been with current employer
+- Existing EMI obligations
 - Family size and dependents
-- Monthly income and existing EMI obligations
-- Purpose (children's education, medical, home renovation, wedding, debt consolidation)
-- Home ownership status
-- Preferred loan tenure for budget planning"""
+- Home ownership status"""
             
             elif 'Self-Employed' in age_segment['segment']:
                 segment_context += """
-Ask about:
+MANDATORY questions to ask (one at a time):
+- Loan amount needed
+- Loan purpose (working capital, expansion, equipment, personal emergency)
+- Preferred loan tenure (in months)
 - Type of business/profession
+- Business name
 - Business vintage (years in operation)
-- Monthly/Annual turnover
-- Purpose (working capital, expansion, equipment, personal emergency)
-- GST registration and ITR filing status
-- Business documentation availability"""
+- Monthly/Annual turnover (MANDATORY)
+- GST registration status and number
+- ITR filing status (last 2 years)
+- Business documentation availability
+- Existing business loans or EMIs"""
             
             elif 'Low-Income or New-to-Credit' in age_segment['segment']:
                 segment_context += """
-Ask about:
-- Current employment (gig work, entry-level, first job)
-- Monthly income
+MANDATORY questions to ask (one at a time):
 - Loan amount needed (keep it realistic for their profile)
-- Purpose (education, vehicle, emergency, settling in new city)
+- Loan purpose (education, vehicle, emergency, settling in new city)
+- Preferred loan tenure (in months)
+- Current employment type (gig work, entry-level, first job)
+- Company/employer name
+- Job title/position
+- Monthly income (MANDATORY)
+- How long have you been employed
 - Any guarantor availability
-- Reassure them about the process"""
+- Reassure them about the process and that we're here to help"""
             
             elif 'Existing Kite Capital Customer' in age_segment['segment']:
                 segment_context += """
-Ask about:
+MANDATORY questions to ask (one at a time):
 - Previous loan experience with us
 - Top-up requirement or new loan
-- Quick verification of pre-approved limit
-- Purpose (should be brief)
+- Loan amount needed
+- Loan purpose (should be brief)
+- Preferred loan tenure
+- Current employment details (company, designation)
+- Current monthly income (MANDATORY - verify if changed)
+- Any changes in employment since last loan
 - Preferred fast-track options"""
         
-        system_prompt = f"""You are a Sales Agent for personal loans.{segment_context}
+        system_prompt = f"""You are a Sales Agent for personal loans who needs to collect ALL required information naturally, one question at a time.{segment_context}
 
-Ask the customer about:
+CRITICAL: Ask ONLY ONE question per response. Wait for the customer's answer before moving to the next question.
+
+MANDATORY Information to collect (in order):
 1. Loan amount needed
 2. Purpose of the loan  
 3. Preferred tenure (in months)
-4. Any other relevant details based on their profile
+4. Employment type (salaried/self-employed/business/gig worker)
+5. Company name (MANDATORY for salaried employees)
+6. Job designation/position (MANDATORY for salaried employees)
+7. Monthly income/salary (MANDATORY for all)
+8. Employment duration (how long at current job)
+9. Existing loan EMI obligations (if any)
 
-Be conversational, empathetic, and helpful. Extract information naturally.
-Make them feel comfortable and understood."""
+For Self-Employed/Business Owners, also collect:
+- Type of business/profession
+- Business vintage (years in operation)
+- Monthly/Annual turnover
+- GST registration status
+
+Guidelines:
+- Ask ONE question at a time
+- Keep questions conversational and natural
+- Be empathetic and helpful
+- Wait for their response before asking the next question
+- Make them feel comfortable and understood
+- Don't list multiple questions in a single response
+- ENSURE you collect ALL mandatory information before concluding"""
         
         messages = [{"role": "system", "content": system_prompt}]
         
@@ -1053,11 +1520,25 @@ Make them feel comfortable and understood."""
                 "purpose": string,
                 "tenure_months": number,
                 "employment_type": "salaried/self_employed/business/gig_worker/other",
-                "monthly_income": number (if mentioned),
+                "monthly_income": number (MANDATORY - must be collected),
+                "company_name": string (MANDATORY for salaried),
+                "designation": string (MANDATORY for salaried),
+                "employment_duration_months": number (if mentioned),
                 "existing_obligations": number (if mentioned),
-                "segment_specific_data": {{}} (any additional relevant info)
+                "segment_specific_data": {{}} (any additional relevant info),
+                "all_required_info_collected": boolean (true only if ALL mandatory fields are present)
             }}
             
+            MANDATORY fields that MUST be collected:
+            - loan_amount
+            - purpose
+            - tenure_months
+            - employment_type
+            - monthly_income
+            - company_name (for salaried employees)
+            - designation (for salaried employees)
+            
+            Set "all_required_info_collected" to true ONLY when ALL mandatory fields are present.
             If any information is missing, return null for that field."""}
         ]
         
@@ -1082,7 +1563,11 @@ Make them feel comfortable and understood."""
                 "tenure_months": None,
                 "employment_type": None,
                 "monthly_income": None,
+                "company_name": None,
+                "designation": None,
+                "employment_duration_months": None,
                 "existing_obligations": None,
                 "segment_specific_data": {},
+                "all_required_info_collected": False,
                 "error": str(e)
             }
