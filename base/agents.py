@@ -784,7 +784,7 @@ class UnderwritingAgent(BaseAgent):
         customer.save()
         
         # Age-based minimum credit score threshold
-        min_credit_score = 700
+        min_credit_score = 650
         if age_segment:
             if age_segment['segment'] == 'Low-Income or New-to-Credit Applicant':
                 min_credit_score = 600  # More lenient for first-time borrowers
